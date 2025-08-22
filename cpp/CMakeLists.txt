@@ -52,6 +52,9 @@ add_executable(lob_tests
   tests/test_headers_compile.cpp
   tests/test_fifo_same_price.cpp
   tests/test_partial_empty_onesided.cpp
+  tests/test_modify_price.cpp         
+  tests/test_stp.cpp                  
+  tests/test_market_sweep.cpp         
 )
 
 
