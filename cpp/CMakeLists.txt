@@ -50,7 +50,10 @@ add_executable(lob_tests
   tests/test_types.cpp
   tests/test_price_levels.cpp
   tests/test_headers_compile.cpp
+  tests/test_fifo_same_price.cpp
+  tests/test_partial_empty_onesided.cpp
 )
+
 
 # Tests need public headers
 target_include_directories(lob_tests PRIVATE
