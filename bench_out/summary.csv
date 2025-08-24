@@ -1,0 +1,9 @@
+metric,value,units
+events_total,1000000,
+warmup_events,100000,
+events_measured,900000,
+p50,42,ns
+p90,125,ns
+p99,1000,ns
+p999,19000,ns
+throughput,3.68268e+06,events_per_second

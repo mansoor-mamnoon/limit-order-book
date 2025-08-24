@@ -45,12 +45,18 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   target_compile_options(lob_util PRIVATE -O2)
 endif()
 
-
 # ---------------- Replay tool ----------------
 add_executable(replay_tool tools/replay.cpp)
 target_link_libraries(replay_tool PRIVATE lob_core lob_util)
 target_include_directories(replay_tool PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
+# ---------------- Benchmark tool (NEW) ----------------
+add_executable(bench_tool tools/bench.cpp)
+target_link_libraries(bench_tool PRIVATE lob_core lob_util)
+target_include_directories(bench_tool PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  target_compile_options(bench_tool PRIVATE -O3 -march=native)
+endif()
 
 # ---------------- Tests ----------------
 # Catch2 is provided by top-level via FetchContent and exposes Catch2::Catch2WithMain
@@ -60,12 +66,11 @@ add_executable(lob_tests
   tests/test_headers_compile.cpp
   tests/test_fifo_same_price.cpp
   tests/test_partial_empty_onesided.cpp
-  tests/test_modify_price.cpp         
-  tests/test_stp.cpp                  
-  tests/test_market_sweep.cpp     
-  tests/test_replay_golden.cpp    
+  tests/test_modify_price.cpp
+  tests/test_stp.cpp
+  tests/test_market_sweep.cpp
+  tests/test_replay_golden.cpp
 )
-
 
 # Tests need public headers
 target_include_directories(lob_tests PRIVATE

@@ -1,0 +1,16 @@
+field,value
+cpu_model,Apple M2 Pro
+os,macOS
+compiler,Clang 15.0.0 (clang-1500.3.9.4)
+march_native,yes
+seed,5976899880219125
+rdtsc_mode,ns
+pin_core,2
+zipf_s,1.2
+zipf_levels,2000
+pareto_alpha,1.3
+walk_sigma,1
+market_ratio,0.1
+cancel_ratio,0.05
+modify_ratio,0.05
+stp_enabled,1
