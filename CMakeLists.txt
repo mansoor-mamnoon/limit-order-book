@@ -10,4 +10,10 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(catch2)
 
+# Build all native code inside cpp/
 add_subdirectory(cpp)
+
+# Note:
+# Pure-Python packaging is driven by scikit-build-core via pyproject.toml.
+# We do NOT install Python files from CMake. scikit-build-core picks up python/
+# via [tool.scikit-build].wheel.packages in pyproject.toml.

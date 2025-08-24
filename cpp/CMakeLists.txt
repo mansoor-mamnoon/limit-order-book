@@ -50,7 +50,7 @@ add_executable(replay_tool tools/replay.cpp)
 target_link_libraries(replay_tool PRIVATE lob_core lob_util)
 target_include_directories(replay_tool PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-# ---------------- Benchmark tool (NEW) ----------------
+# ---------------- Benchmark tool ----------------
 add_executable(bench_tool tools/bench.cpp)
 target_link_libraries(bench_tool PRIVATE lob_core lob_util)
 target_include_directories(bench_tool PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -93,4 +93,41 @@ if(LOB_ENABLE_ASAN AND CMAKE_BUILD_TYPE STREQUAL "Debug")
     target_compile_options(lob_tests PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options   (lob_tests PRIVATE -fsanitize=address)
   endif()
+endif()
+
+# ---------------- pybind11 bindings ----------------
+include(FetchContent)
+# Avoid double-declare if outer project already brought it in
+if(NOT TARGET pybind11::module)
+  FetchContent_Declare(
+    pybind11
+    GIT_REPOSITORY https://github.com/pybind/pybind11.git
+    GIT_TAG v2.12.0
+  )
+  FetchContent_MakeAvailable(pybind11)
+endif()
+
+pybind11_add_module(lob_cpp MODULE
+  ../python/lob/_bindings.cpp
+)
+target_link_libraries(lob_cpp PRIVATE lob_core lob_util)
+target_include_directories(lob_cpp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  target_compile_options(lob_cpp PRIVATE -O3 -march=native -fvisibility=hidden)
+endif()
+
+# The Python module filename will be "_lob.*" and must live inside package "lob".
+set_target_properties(lob_cpp PROPERTIES OUTPUT_NAME "_lob")
+
+# scikit-build-core will place this into site-packages/lob thanks to the DESTINATION below.
+# On *nix, shared library extension is LIBRARY; on Windows it's RUNTIME.
+if(WIN32)
+  install(TARGETS lob_cpp RUNTIME DESTINATION lob)
+  install(TARGETS bench_tool RUNTIME DESTINATION Scripts)
+  install(TARGETS replay_tool RUNTIME DESTINATION Scripts)
+else()
+  install(TARGETS lob_cpp LIBRARY DESTINATION lob)
+  install(TARGETS bench_tool RUNTIME DESTINATION bin)
+  install(TARGETS replay_tool RUNTIME DESTINATION bin)
 endif()
