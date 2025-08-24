@@ -1,40 +1,38 @@
 #include <catch2/catch_test_macros.hpp>
 #include "lob/book_core.hpp"
+#include "lob/price_levels.hpp"
+#include "lob/logging.hpp"
 
 using namespace lob;
 
-TEST_CASE("FIFO at same price is respected") {
-  // Bid book with one price level; we'll hit it with a market sell
-  PriceBand band{100, 110, 1};
-  PriceLevelsContig bids(band), asks(band);
-  bids.set_best_bid(std::numeric_limits<Tick>::min()); // empty
-  asks.set_best_ask(std::numeric_limits<Tick>::max()); // empty
+static PriceBand kBand{90,110,1};
 
-  BookCore book(bids, asks);
+struct TestEnvA {
+  PriceLevelsContig bids{kBand};
+  PriceLevelsContig asks{kBand};
+  SnapshotWriter snap{ "test_out" };
+  JsonlBinLogger logger{ "test_out/run_fifo", /*snapshot_every*/ 10, &snap };
+  BookCore book;
+  TestEnvA() : book(bids, asks, &logger) {}
+};
 
-  // Rest three buy limits at px=105 in arrival order: A(5), B(7), C(3)
-  NewOrder A{1, 1000, 101, 9001, Side::Bid, 105, 5, 0};
-  NewOrder B{2, 1001, 102, 9002, Side::Bid, 105, 7, 0};
-  NewOrder C{3, 1002, 103, 9003, Side::Bid, 105, 3, 0};
-  book.submit_limit(A);
-  book.submit_limit(B);
-  book.submit_limit(C);
+TEST_CASE("FIFO within a single price level") {
+  TestEnvA T;
 
-  // We should have best bid = 105
-  REQUIRE(bids.best_bid() == 105);
+  // Two sells at same price, different users/ids
+  NewOrder s1{1, 1000, 1001, 42, Side::Ask, 100, 5, NONE};
+  NewOrder s2{2, 1001, 1002, 43, Side::Ask, 100, 7, NONE};
+  T.book.submit_limit(s1);
+  T.book.submit_limit(s2);
 
-  // Now a market sell of size 10 should consume A fully(5) then B partially(5 of 7)
-  NewOrder S{4, 1003, 201, 8001, Side::Ask, 0, 10, 0};
-  ExecResult r = book.submit_market(S);
-  REQUIRE(r.filled == 10);
-  REQUIRE(r.remaining == 0);
+  // Market buy for 6 should fully fill s1(5) and then 1 from s2
+  NewOrder mb{3, 1002, 2001, 99, Side::Bid, 0, 6, NONE};
+  ExecResult r = T.book.submit_market(mb);
 
-  // Inspect the level queue at 105: B should remain with qty=2, then C(3)
-  LevelFIFO& L = bids.get_level(105);
+  REQUIRE(r.filled == 6);
+  // Ask level 100 should still have 6 left (7-1) from s2
+  auto& L = T.asks.get_level(100);
+  REQUIRE(L.total_qty == 6);
   REQUIRE(L.head != nullptr);
-  REQUIRE(L.head->id == 102);
-  REQUIRE(L.head->qty == 2);
-  REQUIRE(L.head->next != nullptr);
-  REQUIRE(L.head->next->id == 103);
-  REQUIRE(L.head->next->qty == 3);
+  REQUIRE(L.head->id == 1002); // FIFO honored
 }

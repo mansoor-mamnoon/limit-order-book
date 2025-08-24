@@ -1,9 +1,9 @@
 #pragma once
 #include <unordered_map>
 #include <limits>
-#include <algorithm>
 #include "types.hpp"
 #include "price_levels.hpp"
+#include "logging.hpp"
 
 namespace lob {
 
@@ -16,35 +16,58 @@ struct NewOrder {
   Side      side;     // Bid/Ask
   Tick      price;    // ignored for pure MARKET
   Quantity  qty;      // desired size
-  uint32_t  flags;    // IOC/FOK/POST_ONLY/STP (we only use STP today)
+  uint32_t  flags;    // IOC/FOK/POST_ONLY/STP...
 };
 
+struct ModifyOrder {
+  SeqNo     seq;
+  Timestamp ts;
+  OrderId   id;
+  Tick      new_price;
+  Quantity  new_qty;
+  uint32_t  flags;
+};
+
+// Return summary of a submit/modify
 struct ExecResult {
   Quantity filled{0};
-  Quantity remaining{0}; // For LIMIT: what rested; for MARKET: unfilled qty
+  Quantity remaining{0}; // for LIMIT, remaining rests; for MARKET it's unfilled
 };
 
 class BookCore {
 public:
-  BookCore(IPriceLevels& bids, IPriceLevels& asks)
-    : bids_(bids), asks_(asks) {}
+  BookCore(IPriceLevels& bids, IPriceLevels& asks, IEventLogger* logger=nullptr)
+    : bids_(bids), asks_(asks), logger_(logger) {
+    if (logger_) logger_->set_snapshot_sources(&bids_, &asks_);
+  }
 
-  ExecResult submit_limit (const NewOrder& o);  // trade then rest
-  ExecResult submit_market(const NewOrder& o);  // trade, never rest
+  ExecResult submit_limit(const NewOrder& o);
+  ExecResult submit_market(const NewOrder& o);
 
-  // O(1) cancel via id index
-  bool cancel(OrderId id);
+  bool       cancel(OrderId id);
+  ExecResult modify(const ModifyOrder& m);
 
-  // MODIFY: if price changes, requeue (lose time priority).
-  // If price unchanged, adjust size in-place (reduce/increase; <=0 cancels).
-  // If price improves enough to cross, this will trade (by cancel+resubmit).
-  ExecResult modify(const NewOrder& replacement);
+  // Convenience overload because some tests call modify(NewOrder{...})
+  ExecResult modify(const NewOrder& asModify) {
+    ModifyOrder m{
+      asModify.seq,
+      asModify.ts,
+      asModify.id,
+      asModify.price,   // new price
+      asModify.qty,     // new qty
+      asModify.flags
+    };
+    return modify(m);
+  }
 
   bool empty(Side s) const {
     return (s == Side::Bid)
       ? (bids_.best_bid() == std::numeric_limits<Tick>::min())
       : (asks_.best_ask() == std::numeric_limits<Tick>::max());
   }
+
+  // (optional helper for replay-from-snapshot tests)
+  void rebuild_index_from_books();
 
 private:
   struct IdEntry {
@@ -55,9 +78,10 @@ private:
 
   IPriceLevels& bids_;
   IPriceLevels& asks_;
-  std::unordered_map<OrderId, IdEntry> id_index_; // O(1) node lookup
+  IEventLogger* logger_{nullptr};
+  std::unordered_map<OrderId, IdEntry> id_index_;
 
-  // ----- intrusive FIFO helpers -----
+  // intrusive FIFO helpers
   static inline void enqueue(LevelFIFO& L, OrderNode* n) {
     n->next = nullptr;
     n->prev = L.tail;
@@ -65,7 +89,6 @@ private:
     L.tail = n;
     L.total_qty += n->qty;
   }
-
   static inline void erase(LevelFIFO& L, OrderNode* n) {
     if (n->prev) n->prev->next = n->next; else L.head = n->next;
     if (n->next) n->next->prev = n->prev; else L.tail = n->prev;
@@ -73,13 +96,11 @@ private:
     n->prev = n->next = nullptr;
   }
 
-  // Core matcher used by limit/market/modify resubmits
-  // STP mode: if taker has STP and resting user == taker_user => cancel resting (no trade).
-  Quantity match_against(Side taker_side,
-                         UserId taker_user,
-                         uint32_t taker_flags,
-                         Quantity want,
-                         Tick px_limit);
+  Quantity match_against(Side taker_side, Quantity qty, Tick px_limit,
+                         OrderId taker_order_id, UserId taker_user,
+                         Timestamp ts, bool enable_stp);
+
+  void refresh_best_after_depletion(Side s);
 };
 
 } // namespace lob

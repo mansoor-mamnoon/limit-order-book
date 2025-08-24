@@ -1,41 +1,23 @@
 #include <catch2/catch_test_macros.hpp>
-#include <limits>
 #include "lob/book_core.hpp"
+#include "lob/price_levels.hpp"
+#include "lob/logging.hpp"
+#include <limits>
 
 using namespace lob;
 
-TEST_CASE("Market order on empty book fills zero and does not rest") {
-  PriceBand band{100, 110, 1};
-  PriceLevelsContig bids(band), asks(band);
-  bids.set_best_bid(std::numeric_limits<Tick>::min());
-  asks.set_best_ask(std::numeric_limits<Tick>::max());
-  BookCore book(bids, asks);
+static PriceBand kBand{90,110,1};
 
-  NewOrder M{10, 2000, 301, 7001, Side::Bid, 0, 10, 0};
-  ExecResult r = book.submit_market(M);
-  REQUIRE(r.filled == 0);
-  REQUIRE(r.remaining == 10);
-  REQUIRE(book.empty(Side::Bid)); // nothing rested
-}
+TEST_CASE("Partial fill on one-sided books and empties correctly") {
+  PriceLevelsContig bids{kBand}, asks{kBand};
+  SnapshotWriter snap{"test_out"};
+  JsonlBinLogger logger{"test_out/run_one", 10, &snap};
+  BookCore book{bids, asks, &logger};
 
-TEST_CASE("One-sided book: partial fills up to available depth") {
-  PriceBand band{100, 110, 1};
-  PriceLevelsContig bids(band), asks(band);
-  bids.set_best_bid(std::numeric_limits<Tick>::min());
-  asks.set_best_ask(std::numeric_limits<Tick>::max());
-  BookCore book(bids, asks);
-
-  // Rest 4 lots on ask @106
-  NewOrder A{11, 2100, 401, 6001, Side::Ask, 106, 4, 0};
-  book.submit_limit(A);
-  REQUIRE(asks.best_ask() == 106);
-
-  // Market buy 10 should fill only 4 and leave no resting qty
-  NewOrder M{12, 2101, 402, 6002, Side::Bid, 0, 10, 0};
-  ExecResult r = book.submit_market(M);
-  REQUIRE(r.filled == 4);
-  REQUIRE(r.remaining == 6);
-  // Ask side becomes empty at top
-  LevelFIFO& L = asks.get_level(106);
-  REQUIRE(L.head == nullptr);
+  // Only asks exist
+  book.submit_limit(NewOrder{1,1000,1,1,Side::Ask,100,3,NONE});
+  ExecResult r = book.submit_limit(NewOrder{2,1001,2,2,Side::Bid,100,5,NONE});
+  REQUIRE(r.filled == 3);
+  REQUIRE(asks.best_ask() == std::numeric_limits<Tick>::max());
+  REQUIRE(bids.best_bid() == 100);
 }

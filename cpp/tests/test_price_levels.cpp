@@ -3,23 +3,20 @@
 
 using namespace lob;
 
-TEST_CASE("contiguous levels: index within band and empty by default") {
-  PriceBand band{1000, 1010, 1};
-  PriceLevelsContig levels(band);
-
-  auto &lvl = levels.get_level(1005);
-  REQUIRE(lvl.head == nullptr);
-  REQUIRE(lvl.tail == nullptr);
-  REQUIRE(lvl.total_qty == 0);
-
-  REQUIRE_FALSE(levels.has_level(1005));
+TEST_CASE("PriceLevelsContig basic set/get") {
+  PriceBand band{90,110,1};
+  PriceLevelsContig contig{band};
+  auto& L = contig.get_level(100);
+  REQUIRE(L.total_qty == 0);
+  contig.set_best_bid(100);
+  contig.set_best_ask(105);
+  REQUIRE(contig.best_bid() == 100);
+  REQUIRE(contig.best_ask() == 105);
 }
 
-TEST_CASE("sparse levels: creates on access and empty by default") {
-  PriceLevelsSparse levels;
-  auto &lvl = levels.get_level(4242);
-  REQUIRE(lvl.head == nullptr);
-  REQUIRE(lvl.tail == nullptr);
-  REQUIRE(lvl.total_qty == 0);
-  REQUIRE_FALSE(levels.has_level(4242));
+TEST_CASE("PriceLevelsSparse existence") {
+  PriceLevelsSparse sparse;
+  REQUIRE_FALSE(sparse.has_level(100));
+  auto& L = sparse.get_level(100);
+  REQUIRE(L.head == nullptr);
 }

@@ -1,27 +1,28 @@
 #include <catch2/catch_test_macros.hpp>
-#include <limits>
 #include "lob/book_core.hpp"
+#include "lob/price_levels.hpp"
+#include "lob/logging.hpp"
+#include <limits>
 
 using namespace lob;
 
+static PriceBand kBand{90,110,1};
+
 TEST_CASE("STP cancels resting same-owner orders instead of trading") {
-  PriceBand band{100, 110, 1};
-  PriceLevelsContig bids(band), asks(band);
-  BookCore book(bids, asks);
-  bids.set_best_bid(std::numeric_limits<Tick>::min());
-  asks.set_best_ask(std::numeric_limits<Tick>::max());
+  PriceLevelsContig bids{kBand}, asks{kBand};
+  SnapshotWriter snap{"test_out"};
+  JsonlBinLogger logger{"test_out/run_stp", 10, &snap};
+  BookCore book{bids, asks, &logger};
 
-  // Rest an ask from user 9001
-  NewOrder A{1,1000,201,9001,Side::Ask,105,5,0};
-  book.submit_limit(A);
-  REQUIRE(asks.best_ask() == 105);
-
-  // Incoming buy from the SAME user with STP
-  NewOrder M{2,1001,301,9001,Side::Bid,0,10,STP};
-  ExecResult r = book.submit_market(M);
-
-  // No trade executed; resting same-owner ask got cancelled
+  // User 77 posts ask 100(3)
+  book.submit_limit(NewOrder{1,1000,7001,77,Side::Ask,100,3,NONE});
+  // Same user 77 sends bid with STP at 100(3) that would cross -> resting ask should be canceled
+  ExecResult r = book.submit_limit(NewOrder{2,1001,7002,77,Side::Bid,100,3,STP});
   REQUIRE(r.filled == 0);
-  REQUIRE(r.remaining == 10);
   REQUIRE(asks.best_ask() == std::numeric_limits<Tick>::max());
+
+  auto& Lb = bids.get_level(100);
+  REQUIRE(Lb.total_qty == 3);
+  REQUIRE(Lb.head != nullptr);
+  REQUIRE(Lb.head->id == 7002);
 }

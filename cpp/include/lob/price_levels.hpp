@@ -1,8 +1,8 @@
 #pragma once
 #include <unordered_map>
-#include <map>
 #include <vector>
 #include <limits>
+#include <functional>
 #include "types.hpp"
 
 namespace lob {
@@ -29,24 +29,27 @@ class IPriceLevels {
 public:
   virtual ~IPriceLevels() = default;
 
-  // Access FIFO at a price (create level if missing for this impl)
+  // Access the FIFO at a price (create level if missing for this impl)
   virtual LevelFIFO& get_level(Tick px) = 0;
   virtual bool       has_level(Tick px) const = 0;
 
-  // Top-of-book getters; inactive returns sentinel:
+  // Top-of-book getters; the inactive one should return a sentinel:
   //  - best_bid(): std::numeric_limits<Tick>::min() means "empty"
   //  - best_ask(): std::numeric_limits<Tick>::max() means "empty"
   virtual Tick best_bid() const = 0;
   virtual Tick best_ask() const = 0;
 
-  // Top-of-book setters used by BookCore
+  // Top-of-book setters used by BookCore to mark emptiness/improvements
   virtual void set_best_bid(Tick px) = 0;
   virtual void set_best_ask(Tick px) = 0;
 
-  // Day-3: find the **next** non-empty price after/before a given price
-  // For asks: strictly greater than px; for bids: strictly less than px.
-  virtual Tick next_ask_after(Tick px) const = 0;
-  virtual Tick next_bid_before(Tick px) const = 0;
+  // Enumerate all orders currently present (for snapshot/rebuild).
+  // The callback is called for each (price level, node) pair.
+  virtual void for_each_order(const std::function<void(Tick, OrderNode*)>& fn) const = 0;
+
+  // Enumerate only non-empty levels (used by logging/snapshots).
+  // Calls fn(price, const LevelFIFO&) for each level that has at least one order.
+  virtual void for_each_nonempty(const std::function<void(Tick, const LevelFIFO&)>& fn) const = 0;
 };
 
 // -------- Contiguous array for bounded [min,max] ticks (replay) --------
@@ -54,6 +57,7 @@ class PriceLevelsContig final : public IPriceLevels {
 public:
   explicit PriceLevelsContig(PriceBand band)
     : band_(band),
+      // allocate one LevelFIFO per tick in [min,max]
       levels_(static_cast<size_t>(band.max_tick - band.min_tick + 1)),
       best_bid_(std::numeric_limits<Tick>::min()),
       best_ask_(std::numeric_limits<Tick>::max()) {}
@@ -71,28 +75,24 @@ public:
   void set_best_bid(Tick px) override { best_bid_ = px; }
   void set_best_ask(Tick px) override { best_ask_ = px; }
 
-  Tick next_ask_after(Tick px) const override {
-    const size_t start = idx(px) + 1;
-    for (size_t i = start; i < levels_.size(); ++i) {
-      if (levels_[i].head) return static_cast<Tick>(band_.min_tick + static_cast<Tick>(i));
+  void for_each_order(const std::function<void(Tick, OrderNode*)>& fn) const override {
+    for (Tick px = band_.min_tick; px <= band_.max_tick; ++px) {
+      const LevelFIFO& L = levels_[idx(px)];
+      for (OrderNode* n = L.head; n; n = n->next) {
+        fn(px, n);
+      }
     }
-    return std::numeric_limits<Tick>::max();
   }
 
-  Tick next_bid_before(Tick px) const override {
-    size_t i = idx(px);
-    if (i == 0) return std::numeric_limits<Tick>::min();
-    for (size_t k = i; k-- > 0; ) {
-      if (levels_[k].head) return static_cast<Tick>(band_.min_tick + static_cast<Tick>(k));
+  void for_each_nonempty(const std::function<void(Tick, const LevelFIFO&)>& fn) const override {
+    for (Tick px = band_.min_tick; px <= band_.max_tick; ++px) {
+      const LevelFIFO& L = levels_[idx(px)];
+      if (L.head) fn(px, L);
     }
-    return std::numeric_limits<Tick>::min();
   }
 
 private:
-  size_t idx(Tick px) const {
-    // assume px within [min,max]; (add asserts if you want)
-    return static_cast<size_t>(px - band_.min_tick);
-  }
+  size_t idx(Tick px) const { return static_cast<size_t>(px - band_.min_tick); }
 
   PriceBand              band_;
   std::vector<LevelFIFO> levels_;
@@ -100,7 +100,7 @@ private:
   Tick                   best_ask_;
 };
 
-// -------- Sparse (ordered) map for wide/unknown bands --------
+// -------- Sparse map for wide/unknown bands --------
 class PriceLevelsSparse final : public IPriceLevels {
 public:
   LevelFIFO& get_level(Tick px) override { return map_[px]; }
@@ -116,28 +116,26 @@ public:
   void set_best_bid(Tick px) override { best_bid_ = px; }
   void set_best_ask(Tick px) override { best_ask_ = px; }
 
-  // first non-empty price strictly > px
-  Tick next_ask_after(Tick px) const override {
-    for (auto it = map_.upper_bound(px); it != map_.end(); ++it) {
-      if (it->second.head) return it->first;
+  void for_each_order(const std::function<void(Tick, OrderNode*)>& fn) const override {
+    for (const auto& kv : map_) {
+      Tick px = kv.first;
+      const LevelFIFO& L = kv.second;
+      for (OrderNode* n = L.head; n; n = n->next) {
+        fn(px, n);
+      }
     }
-    return std::numeric_limits<Tick>::max();
   }
 
-  // first non-empty price strictly < px (walk left)
-  Tick next_bid_before(Tick px) const override {
-    auto it = map_.lower_bound(px);
-    // lower_bound returns first >= px, so the previous (if any) is < px
-    while (true) {
-      if (it == map_.begin()) return std::numeric_limits<Tick>::min();
-      --it;
-      if (it->second.head) return it->first;
-      // keep walking left if empty buckets exist
+  void for_each_nonempty(const std::function<void(Tick, const LevelFIFO&)>& fn) const override {
+    for (const auto& kv : map_) {
+      Tick px = kv.first;
+      const LevelFIFO& L = kv.second;
+      if (L.head) fn(px, L);
     }
   }
 
 private:
-  std::map<Tick, LevelFIFO> map_; // ordered for next/prev
+  std::unordered_map<Tick, LevelFIFO> map_; // (later: absl::flat_hash_map)
   Tick best_bid_{std::numeric_limits<Tick>::min()};
   Tick best_ask_{std::numeric_limits<Tick>::max()};
 };
