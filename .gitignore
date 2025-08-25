@@ -12,3 +12,4 @@ parquet/
 *.json.gz
 *.jsonl.gz
 
+.venv
