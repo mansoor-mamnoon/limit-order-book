@@ -12,12 +12,10 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# Default to Release if not provided
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
 
-# Global compile/link opts influenced by switches
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   if(LOB_PROFILING)
     add_compile_options(-fno-omit-frame-pointer -g)
@@ -34,17 +32,11 @@ add_library(lob_core STATIC
   src/book_core.cpp
   src/price_levels.cpp
 )
-target_include_directories(lob_core PUBLIC
-  ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-
-# Aggressive hot-path flags (Clang/GCC)
+target_include_directories(lob_core PUBLIC include)
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   target_compile_options(lob_core PRIVATE
     -O3 -march=native
-    -fno-exceptions
-    -fno-rtti
-    -fvisibility=hidden
+    -fno-exceptions -fno-rtti -fvisibility=hidden
   )
 endif()
 
@@ -52,40 +44,31 @@ endif()
 add_library(lob_util STATIC
   src/util.cpp
   src/logging.cpp
+  src/taq_writer.cpp
 )
-target_include_directories(lob_util PUBLIC
-  ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
+target_include_directories(lob_util PUBLIC include)
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   target_compile_options(lob_util PRIVATE -O2)
 endif()
 
 # ---------------- Tools ----------------
-add_executable(replay_tool tools/replay.cpp)
+add_executable(replay_tool
+  src/replay.cpp
+)
 target_link_libraries(replay_tool PRIVATE lob_core lob_util)
-target_include_directories(replay_tool PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(replay_tool PRIVATE include)
 
 add_executable(bench_tool tools/bench.cpp)
 target_link_libraries(bench_tool PRIVATE lob_core lob_util)
-target_include_directories(bench_tool PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(bench_tool PRIVATE include)
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   target_compile_options(bench_tool PRIVATE -O3 -march=native)
 endif()
 
 # ---------------- Tests (optional) ----------------
 if(LOB_BUILD_TESTS)
-  if (TARGET Catch2::Catch2WithMain)
-    set(_LOB_HAVE_CATCH2 TRUE)
-  else()
-    find_package(Catch2 3 QUIET CONFIG)
-    if (Catch2_FOUND)
-      set(_LOB_HAVE_CATCH2 TRUE)
-    else()
-      message(STATUS "LOB_BUILD_TESTS=ON but Catch2 not found; skipping C++ tests.")
-    endif()
-  endif()
-
-  if (_LOB_HAVE_CATCH2)
+  find_package(Catch2 3 QUIET CONFIG)
+  if(Catch2_FOUND)
     enable_testing()
     add_executable(lob_tests
       tests/test_types.cpp
@@ -98,14 +81,8 @@ if(LOB_BUILD_TESTS)
       tests/test_market_sweep.cpp
       tests/test_replay_golden.cpp
     )
-    target_include_directories(lob_tests PRIVATE
-      ${CMAKE_CURRENT_SOURCE_DIR}/include
-    )
-    target_link_libraries(lob_tests PRIVATE
-      lob_core
-      lob_util
-      Catch2::Catch2WithMain
-    )
+    target_include_directories(lob_tests PRIVATE include)
+    target_link_libraries(lob_tests PRIVATE lob_core lob_util Catch2::Catch2WithMain)
     add_test(NAME lob_tests COMMAND lob_tests)
 
     if(LOB_ENABLE_ASAN AND CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -114,18 +91,20 @@ if(LOB_BUILD_TESTS)
         target_link_options   (lob_tests PRIVATE -fsanitize=address)
       endif()
     endif()
+  else()
+    message(STATUS "LOB_BUILD_TESTS=ON but Catch2 not found; skipping C++ tests.")
   endif()
 endif()
 
-# ---------------- Sanitizers in Debug only ----------------
+# ---------------- Sanitizers in Debug ----------------
 if(LOB_ENABLE_ASAN AND CMAKE_BUILD_TYPE STREQUAL "Debug")
   if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-    target_compile_options(lob_core  PRIVATE -fsanitize=address -fno-omit-frame-pointer)
-    target_link_options   (lob_core  PRIVATE -fsanitize=address)
+    target_compile_options(lob_core PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+    target_link_options   (lob_core PRIVATE -fsanitize=address)
   endif()
 endif()
 
-# ---------------- pybind11 module (for direct builds) ----------------
+# ---------------- pybind11 module ----------------
 include(FetchContent)
 if(NOT TARGET pybind11::module)
   FetchContent_Declare(
@@ -140,13 +119,13 @@ pybind11_add_module(lob_cpp MODULE
   ../python/olob/_bindings.cpp
 )
 target_link_libraries(lob_cpp PRIVATE lob_core lob_util)
-target_include_directories(lob_cpp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(lob_cpp PRIVATE include)
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   target_compile_options(lob_cpp PRIVATE -O3 -march=native -fvisibility=hidden)
 endif()
 set_target_properties(lob_cpp PROPERTIES OUTPUT_NAME "_lob")
 
-# Install into the Python package 'olob' (library on Unix, runtime on Windows)
+# ---------------- Install ----------------
 if(WIN32)
   install(TARGETS lob_cpp RUNTIME DESTINATION olob)
   install(TARGETS bench_tool RUNTIME DESTINATION Scripts)

@@ -332,6 +332,45 @@ python -m orderbook_tools.validate \
   --snap-glob "*depth/snapshot-*.json.gz"
 ```
 
+## ▶️ Replay Engine (Real-Time & N× Accelerated)
+
+**What it does**
+- Replays normalized market events into the C++ `BookCore`, preserving inter‑arrival gaps with a speed control (e.g., `1x`, `10x`, `50x`).
+- Samples TAQ‑like **quotes** on a fixed time grid (e.g., every **50 ms**): best bid/ask, **mid**, **spread**, **microprice**.
+- Records **trades** as event‑driven prints.
+- Writes outputs to CSV (and optionally Parquet via a tiny Python helper).
+
+**Why it matters**
+- Produces deterministic, **monotonic** time series for research & backtests.
+- Enables fast‑forward processing for large captures.
+- Exercises the actual C++ book under realistic feeds.
+
+**Usage**
+```bash
+# Convert your normalized Parquet to CSV with required columns
+python - <<'EOF'
+import pandas as pd
+df = pd.read_parquet("parquet/YYYY-MM-DD/<exchange>/<symbol>/events.parquet")
+if 'ts_ns' not in df.columns:
+  df['ts_ns'] = pd.to_datetime(df['ts'], utc=True).view('int64')
+df['type'] = df['type'].astype(str).str.lower()
+df['side'] = df['side'].astype(str).str.lower().map({'b':'B','bid':'B','buy':'B','a':'A','ask':'A','sell':'A','s':'A'}).fillna('A')
+df[['ts_ns','type','side','price','qty']].to_csv("parquet_export.csv", index=False)
+EOF
+
+# Replay at 50×, sampling quotes every 50 ms
+./build/cpp/replay_tool \
+  --file parquet_export.csv \
+  --speed 50x \
+  --cadence-ms 50 \
+  --quotes-out taq_quotes.csv \
+  --trades-out taq_trades.csv
+
+# Optional: convert TAQ CSVs to Parquet
+python python/csv_to_parquet.py --in taq_quotes.csv --out taq_quotes.parquet
+python python/csv_to_parquet.py --in taq_trades.csv --out taq_trades.parquet
+
+
 ## 🎯 Summary
 
 - **Low-latency hot path**: arenas, branch minimization, cache locality.  
