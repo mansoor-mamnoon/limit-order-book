@@ -1,0 +1,2 @@
+# Force Linguist to recognize C++ source
+cpp/* linguist-language=C++
