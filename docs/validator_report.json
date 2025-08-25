@@ -1,0 +1,12 @@
+{
+  "date": "2025-08-25",
+  "exchange": "binanceus",
+  "symbol": "BTCUSDT",
+  "tick_size": 0.01,
+  "window_minutes": 2,
+  "levels_for_checksum": 10,
+  "max_drift_ticks": 210,
+  "mean_drift_ticks": 161.6,
+  "acceptance_passed": false,
+  "checkpoints": 5
+}

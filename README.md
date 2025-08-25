@@ -291,6 +291,47 @@ python docs/make_depth_chart.py \
 
 ---
 
+## 📖 Order Book Reconstruction & Validation
+
+### What it does
+- Starts from a full exchange REST snapshot.  
+- Applies WebSocket depth updates (diffs) in strict sequence to rebuild the live Level-2 book.  
+- Periodically resyncs from later snapshots when gaps are detected.  
+- Computes a top-N checksum and records best bid/ask per step.  
+
+### Why it matters
+- Produces a deterministic, gap-aware view of the L2 book.  
+- Handles out-of-order updates, drops, and partial feeds.  
+- Enables objective quality checks via tick-level drift vs. the exchange’s own snapshot.  
+
+---
+
+### 🔧 Usage
+
+**Capture (example, Binance US)**
+```bash
+lob crypto-capture --exchange binanceus --symbol BTCUSDT \
+  --minutes 35 --raw-dir raw --snapshot-every-sec 60
+```
+
+**Reconstruct**
+```bash
+python -m orderbook_tools.reconstruct \
+  --raw-dir raw --date YYYY-MM-DD --exchange binanceus --symbol BTCUSDT \
+  --out-dir recon --tick-size 0.01 \
+  --snap-glob "*depth/snapshot-*.json.gz" \
+  --diff-glob "*depth/diffs-*.jsonl.gz"
+```
+
+**Validate (30-minute check)**
+```bash
+python -m orderbook_tools.validate \
+  --raw-dir raw --recon-dir recon \
+  --date YYYY-MM-DD --exchange binanceus --symbol BTCUSDT \
+  --tick-size 0.01 --window-min 30 \
+  --snap-glob "*depth/snapshot-*.json.gz"
+```
+
 ## 🎯 Summary
 
 - **Low-latency hot path**: arenas, branch minimization, cache locality.  
