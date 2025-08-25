@@ -192,7 +192,7 @@ def _parse_diff_msg(obj: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 def _emit_record(book: L2Book, E: int, u: int, expected: int, applied: bool,
                  reason: str, drops: int, gaps: int, resyncs: int, levels: int) -> Dict[str, Any]:
     bb = book.best_bid(); aa = book.best_ask()
-    return {
+    rec: Dict[str, Any] = {
         "event_time_ms": E,
         "seq_u": u,
         "expected_next": expected,
@@ -207,6 +207,15 @@ def _emit_record(book: L2Book, E: int, u: int, expected: int, applied: bool,
         "best_ask_ticks": (aa.price_ticks if aa else None),
         "best_ask_qty": (str(aa.qty) if aa else None),
     }
+
+    # --- NEW: include full L1–L10 ladders as absolute price/qty arrays ---
+    # Uses your L2Book.snapshot_tops(n), which returns prices as Decimal already.
+    tops = book.snapshot_tops(levels)
+    # Cast to Python floats for compact Parquet and easy downstream use
+    rec["bids"] = [[float(p), float(q)] for p, q in tops.get("bids", [])]
+    rec["asks"] = [[float(p), float(q)] for p, q in tops.get("asks", [])]
+
+    return rec
 
 def _encode_decimals(d: Dict[str, Any]) -> Dict[str, Any]:
     from decimal import Decimal as D

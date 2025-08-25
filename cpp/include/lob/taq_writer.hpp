@@ -6,22 +6,25 @@
 
 namespace lob {
 
-// Simple CSV writer for TAQ-like outputs.
-// We keep it dependency-free (no Arrow); Parquet is handled by a tiny Python helper (provided).
+// Dependency-free TAQ-like CSV writer.
+// Quotes are sampled on a fixed cadence by the replay tool; trades are event-driven.
 class TaqWriter {
 public:
-  // Two files: one for quotes sampled at fixed cadence; one for raw trades.
   TaqWriter() = default;
   ~TaqWriter() { close(); }
 
-  // Open CSVs; write headers.
+  // Open CSVs; writes headers.
+  // quotes_csv columns (Analytics v1 contract):
+  //   ts_ns,bid,ask,bid_sz,ask_sz,mid,spread,microprice
+  // trades_csv columns:
+  //   ts_ns,price,qty,side
   bool open(const std::string& quotes_csv, const std::string& trades_csv);
 
-  // Close files if open.
+  // Close files if open (flushes).
   void close();
 
   // Quotes sampled on a time grid.
-  // All timestamps are nanoseconds since UNIX epoch for determinism + monotonicity checks.
+  // All timestamps are nanoseconds since UNIX epoch.
   void write_quote_row(
       int64_t ts_ns,
       double bid_px, double bid_sz,
@@ -37,12 +40,9 @@ private:
   std::FILE* qf_ = nullptr;
   std::FILE* tf_ = nullptr;
 
-  // For monotonicity asserts (best-effort; we don't throw)
+  // Monotonicity best-effort warnings (we don't throw).
   std::optional<int64_t> last_quote_ts_ns_;
   std::optional<int64_t> last_trade_ts_ns_;
-
-  // Naive CSV escape for safety (not strictly needed for numeric data).
-  static std::string esc(const std::string& s);
 
   static void fprint_double(std::FILE* f, double v);
 };

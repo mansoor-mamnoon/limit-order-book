@@ -20,4 +20,5 @@ __all__ = [
     "FOK",
     "POST_ONLY",
     "STP",
+    "metrics",
 ]

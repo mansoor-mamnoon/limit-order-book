@@ -372,6 +372,50 @@ python python/csv_to_parquet.py --in taq_trades.csv --out taq_trades.parquet
 
 ```
 
+## 📊 Market Analytics
+
+This module computes **microstructure metrics** from replayed TAQ quotes and reconstructed depth:
+
+- **Spread**: ask − bid  
+- **Microprice**: imbalance-aware mid = (bid_px·ask_sz + ask_px·bid_sz) / (bid_sz + ask_sz)  
+- **Imbalance**: bid volume ÷ (bid volume + ask volume)  
+- **Depth (L1–L10)**: cumulative quantities at the top 10 bid/ask levels  
+
+---
+
+### Usage
+```bash
+python -m olob.metrics \
+  --quotes taq_quotes.csv \
+  --depth-top10 recon/2025-08-25/binanceus/BTCUSDT/top10_depth.parquet \
+  --out-json   analytics/summary.json \
+  --plots-out  analytics/plots
+```
+
+- `analytics/summary.json`: time-weighted averages and percentiles.  
+- `analytics/plots/`: saved PNG charts (examples below).  
+
+---
+
+## 📈 Example Outputs
+
+**Spread over time**  
+![Spread over time](analytics/plots/spread.png)
+
+**Mid vs Microprice**  
+![Mid vs Microprice](analytics/plots/mid_microprice.png)
+
+**Best-level imbalance (L1)**  
+![Best-level imbalance](analytics/plots/imbalance_L1.png)
+
+**Top-10 Bid Depth**  
+![Bid depth L1–L10](analytics/plots/depth_bid.png)
+
+**Top-10 Ask Depth**  
+![Ask depth L1–L10](analytics/plots/depth_ask.png)
+
+---
+
 ## 🎯 Summary
 
 - **Low-latency hot path**: arenas, branch minimization, cache locality.  

@@ -1,6 +1,8 @@
 #pragma once
 #include <unordered_map>
 #include <limits>
+#include <vector>   // <-- added
+#include <utility>  // <-- added
 #include "types.hpp"
 #include "price_levels.hpp"
 #include "logging.hpp"
@@ -79,6 +81,12 @@ public:
 
   // (optional helper for replay-from-snapshot tests)
   void rebuild_index_from_books();
+
+  // -------- NEW: Top-N levels helper --------
+  // Returns up to `levels` pairs of (price_ticks, total_qty) ordered best→worse.
+  // For bids: descending prices; for asks: ascending prices.
+  // NOTE: returns ticks (not absolute price). Convert with your tick size as needed.
+  std::vector<std::pair<Tick, Quantity>> topN(Side s, int levels);
 
 private:
   struct IdEntry {

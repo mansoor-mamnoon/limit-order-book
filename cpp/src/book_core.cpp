@@ -292,6 +292,40 @@ void BookCore::rebuild_index_from_books() {
   });
 }
 
+// -------- NEW: Top-N levels helper --------
+std::vector<std::pair<Tick, Quantity>> BookCore::topN(Side s, int levels) {
+  std::vector<std::pair<Tick, Quantity>> out;
+  if (levels <= 0) return out;
+  out.reserve(static_cast<size_t>(levels));
+
+  const bool isBid = (s == Side::Bid);
+  auto& book = isBid ? bids_ : asks_;
+
+  // Collect all non-empty levels
+  std::vector<std::pair<Tick, Quantity>> tmp;
+  tmp.reserve(128); // heuristic
+  book.for_each_nonempty([&](Tick px, const LevelFIFO& L){
+    if (L.head && L.total_qty > 0) {
+      tmp.emplace_back(px, L.total_qty);
+    }
+  });
+
+  if (tmp.empty()) return out;
+
+  // Sort best→worse
+  if (isBid) {
+    std::sort(tmp.begin(), tmp.end(),
+              [](const auto& a, const auto& b){ return a.first > b.first; });
+  } else {
+    std::sort(tmp.begin(), tmp.end(),
+              [](const auto& a, const auto& b){ return a.first < b.first; });
+  }
+
+  const int n = std::min<int>(levels, static_cast<int>(tmp.size()));
+  out.insert(out.end(), tmp.begin(), tmp.begin() + n);
+  return out;
+}
+
 // Explicit instantiations for the template members we defined in this TU
 template Quantity BookCore::match_against_side<true >(Quantity, Tick, OrderId, UserId, Timestamp, bool);
 template Quantity BookCore::match_against_side<false>(Quantity, Tick, OrderId, UserId, Timestamp, bool);
