@@ -285,6 +285,7 @@ python docs/make_depth_chart.py \
   --parquet parquet/2025-08-24/binanceus/BTCUSDT/events.parquet \
   --out docs/depth_chart.png
 ```
+![Depth chart](docs/depth_chart.png)
 
 *Note*: This chart approximates best bid/ask by forward-filling incremental book updates. It demonstrates that live capture & normalization worked end-to-end.
 
