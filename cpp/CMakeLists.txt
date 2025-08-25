@@ -3,7 +3,9 @@ project(lob LANGUAGES CXX)
 
 # ---------------- Options ----------------
 option(LOB_ENABLE_ASAN   "Enable AddressSanitizer in Debug" ON)
-option(LOB_BUILD_TESTS   "Build C++ tests (requires Catch2)" OFF)  # <--- default OFF for standalone build
+option(LOB_BUILD_TESTS   "Build C++ tests (requires Catch2)" OFF)  # default OFF standalone
+option(LOB_PROFILING     "Build with frame pointers for perf/Instruments" OFF)
+option(LOB_LTO           "Enable Link Time Optimization in Release" OFF)
 
 # ---------------- Global defaults ----------------
 set(CMAKE_CXX_STANDARD 20)
@@ -13,6 +15,18 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # Default to Release if not provided
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
+# Global compile/link opts influenced by switches
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  if(LOB_PROFILING)
+    add_compile_options(-fno-omit-frame-pointer -g)
+  endif()
+  if(CMAKE_BUILD_TYPE STREQUAL "Release" AND LOB_LTO)
+    add_link_options(-flto)
+    add_compile_options(-flto)
+  endif()
+  add_compile_definitions(NDEBUG)
 endif()
 
 # ---------------- Core (hot path) ----------------
@@ -59,11 +73,19 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
 endif()
 
 # ---------------- Tests (optional) ----------------
-# When building this 'cpp' dir standalone, Catch2 may not be provided by parent.
-# Only attempt tests if explicitly requested AND Catch2 is found.
 if(LOB_BUILD_TESTS)
-  find_package(Catch2 3 QUIET CONFIG)
-  if (Catch2_FOUND)
+  if (TARGET Catch2::Catch2WithMain)
+    set(_LOB_HAVE_CATCH2 TRUE)
+  else()
+    find_package(Catch2 3 QUIET CONFIG)
+    if (Catch2_FOUND)
+      set(_LOB_HAVE_CATCH2 TRUE)
+    else()
+      message(STATUS "LOB_BUILD_TESTS=ON but Catch2 not found; skipping C++ tests.")
+    endif()
+  endif()
+
+  if (_LOB_HAVE_CATCH2)
     enable_testing()
     add_executable(lob_tests
       tests/test_types.cpp
@@ -85,14 +107,13 @@ if(LOB_BUILD_TESTS)
       Catch2::Catch2WithMain
     )
     add_test(NAME lob_tests COMMAND lob_tests)
+
     if(LOB_ENABLE_ASAN AND CMAKE_BUILD_TYPE STREQUAL "Debug")
       if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
         target_compile_options(lob_tests PRIVATE -fsanitize=address -fno-omit-frame-pointer)
         target_link_options   (lob_tests PRIVATE -fsanitize=address)
       endif()
     endif()
-  else()
-    message(STATUS "LOB_BUILD_TESTS=ON but Catch2 not found; skipping C++ tests.")
   endif()
 endif()
 
@@ -106,7 +127,6 @@ endif()
 
 # ---------------- pybind11 module (for direct builds) ----------------
 include(FetchContent)
-# Bring in pybind11 if not provided by a parent project
 if(NOT TARGET pybind11::module)
   FetchContent_Declare(
     pybind11

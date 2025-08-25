@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <chrono>
 
+// Include your library headers
 #include "lob/book_core.hpp"
 #include "lob/price_levels.hpp"
 #include "lob/types.hpp"
@@ -13,49 +14,23 @@ using namespace lob;
 using clk = std::chrono::steady_clock;
 
 struct Args {
-  uint64_t msgs   = 2'000'000;
+  uint64_t msgs = 2'000'000;
   uint64_t warmup = 50'000;
   const char* out_csv = nullptr;
-  const char* hist    = nullptr;
+  const char* hist = nullptr;
 } A;
 
 static bool arg_eq(const char* a, const char* b){ return std::strcmp(a,b)==0; }
-static uint64_t to_u64(const char* s){
-  char* e;
-  auto v = std::strtoull(s,&e,10);
-  if(*e){ std::fprintf(stderr,"bad int: %s\n",s); std::exit(2); }
-  return v;
-}
-
-static void usage_and_exit(const char* argv0){
-  std::fprintf(stderr,
-    "Usage: %s [N | --msgs N | --num N | -n N] [--warmup N] [--out-csv PATH] [--hist PATH]\n"
-    "  N / --msgs / --num / -n   : number of measured messages (default 2000000)\n"
-    "  --warmup N                : warmup messages (default 50000)\n"
-    "  --out-csv PATH            : write percentiles + throughput to CSV\n"
-    "  --hist PATH               : write 0..100us histogram CSV (bucket_us,count)\n",
-    argv0);
-  std::exit(2);
-}
+static uint64_t to_u64(const char* s){ char* e; auto v = std::strtoull(s,&e,10); if(*e) { std::fprintf(stderr,"bad int: %s\n",s); std::exit(2);} return v; }
 
 static void parse(int argc, char** argv){
-  bool have_msgs = false;
   for (int i=1;i<argc;i++){
-    if (arg_eq(argv[i],"--msgs") && i+1<argc)          { A.msgs = to_u64(argv[++i]); have_msgs=true; }
-    else if (arg_eq(argv[i],"--num") && i+1<argc)      { A.msgs = to_u64(argv[++i]); have_msgs=true; }
-    else if (arg_eq(argv[i],"-n") && i+1<argc)         { A.msgs = to_u64(argv[++i]); have_msgs=true; }
-    else if (arg_eq(argv[i],"--warmup") && i+1<argc)   { A.warmup = to_u64(argv[++i]); }
-    else if (arg_eq(argv[i],"--out-csv") && i+1<argc)  { A.out_csv = argv[++i]; }
-    else if (arg_eq(argv[i],"--hist") && i+1<argc)     { A.hist = argv[++i]; }
-    else if (argv[i][0] != '-') {
-      // positional N for backward compat
-      A.msgs = to_u64(argv[i]); have_msgs=true;
-    } else {
-      std::fprintf(stderr, "Unknown arg: %s\n", argv[i]);
-      usage_and_exit(argv[0]);
-    }
+    if (arg_eq(argv[i],"--msgs") && i+1<argc)    { A.msgs = to_u64(argv[++i]); }
+    else if (arg_eq(argv[i],"--warmup") && i+1<argc){ A.warmup = to_u64(argv[++i]); }
+    else if (arg_eq(argv[i],"--out-csv") && i+1<argc){ A.out_csv = argv[++i]; }
+    else if (arg_eq(argv[i],"--hist") && i+1<argc){ A.hist = argv[++i]; }
+    else { std::fprintf(stderr,"Unknown arg: %s\n", argv[i]); std::exit(2); }
   }
-  (void)have_msgs; // not strictly needed; default is fine
 }
 
 struct Histo {
@@ -63,8 +38,6 @@ struct Histo {
   uint64_t buckets[MAX_US+1]{};
   void add(double us) {
     int i = (us<MAX_US)? (int)us : MAX_US;
-    if (i < 0) i = 0;
-    if (i > MAX_US) i = MAX_US;
     buckets[i]++;
   }
   void write(const char* path){
@@ -124,14 +97,4 @@ int main(int argc, char** argv){
   std::printf("latency_us: p50=%.2f p90=%.2f p99=%.2f p99.9=%.2f\n",
               p50, p90, p99, p999);
 
-  if (A.out_csv) {
-    FILE* f = std::fopen(A.out_csv,"w");
-    if (f) {
-      std::fprintf(f,"percentile,us\n50,%.3f\n90,%.3f\n99,%.3f\n99.9,%.3f\n", p50,p90,p99,p999);
-      std::fprintf(f,"throughput_msgs_per_sec,%.1f\n", mps);
-      std::fclose(f);
-    }
-  }
-  H.write(A.hist);
-  return 0;
-}
+  if (A.out_csv)_

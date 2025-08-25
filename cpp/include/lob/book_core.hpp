@@ -4,6 +4,17 @@
 #include "types.hpp"
 #include "price_levels.hpp"
 #include "logging.hpp"
+#include "mempool.hpp"
+
+#if defined(__GNUC__) || defined(__clang__)
+  #define LOB_LIKELY(x)   __builtin_expect(!!(x), 1)
+  #define LOB_UNLIKELY(x) __builtin_expect(!!(x), 0)
+  #define LOB_ALWAYS_INLINE inline __attribute__((always_inline))
+#else
+  #define LOB_LIKELY(x)   (x)
+  #define LOB_UNLIKELY(x) (x)
+  #define LOB_ALWAYS_INLINE inline
+#endif
 
 namespace lob {
 
@@ -41,7 +52,7 @@ public:
     if (logger_) logger_->set_snapshot_sources(&bids_, &asks_);
   }
 
-  ExecResult submit_limit(const NewOrder& o);
+  ExecResult submit_limit (const NewOrder& o);
   ExecResult submit_market(const NewOrder& o);
 
   bool       cancel(OrderId id);
@@ -76,10 +87,22 @@ private:
     OrderNode* node;
   };
 
-  IPriceLevels& bids_;
-  IPriceLevels& asks_;
-  IEventLogger* logger_{nullptr};
-  std::unordered_map<OrderId, IdEntry> id_index_;
+  // -------- Memory pool helpers (no malloc/free in hot path) --------
+  SlabPool<OrderNode> order_pool_{2}; // 2 slabs to start; grows on demand
+
+  LOB_ALWAYS_INLINE OrderNode* alloc_node() {
+    OrderNode* n = order_pool_.alloc();
+    n->alloc_kind = 1; // pooled
+    return n;
+  }
+  LOB_ALWAYS_INLINE void free_node(OrderNode* n) {
+    if (LOB_LIKELY(n->alloc_kind == 1)) {
+      order_pool_.free(n);
+    } else {
+      // nodes built by loaders/tests not using the pool
+      delete n;
+    }
+  }
 
   // intrusive FIFO helpers
   static inline void enqueue(LevelFIFO& L, OrderNode* n) {
@@ -96,11 +119,27 @@ private:
     n->prev = n->next = nullptr;
   }
 
+  // -------- Branch-minimized matching (compile-time side) --------
+  template<bool IsBid>
+  ExecResult submit_limit_side(const NewOrder& o);
+
+  template<bool IsBid>
+  Quantity match_against_side(Quantity qty, Tick px_limit,
+                              OrderId taker_order_id, UserId taker_user,
+                              Timestamp ts, bool enable_stp);
+
+  // Fallback helpers used by generic code
   Quantity match_against(Side taker_side, Quantity qty, Tick px_limit,
                          OrderId taker_order_id, UserId taker_user,
                          Timestamp ts, bool enable_stp);
 
   void refresh_best_after_depletion(Side s);
+
+private:
+  IPriceLevels& bids_;
+  IPriceLevels& asks_;
+  IEventLogger* logger_{nullptr};
+  std::unordered_map<OrderId, IdEntry> id_index_;
 };
 
 } // namespace lob

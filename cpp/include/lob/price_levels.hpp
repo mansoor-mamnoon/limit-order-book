@@ -16,6 +16,8 @@ struct OrderNode {
   uint32_t   flags;
   OrderNode* prev{nullptr};
   OrderNode* next{nullptr};
+  // Day 7: allocation tag (0 = new/delete; 1 = pooled)
+  uint8_t    alloc_kind{0};
 };
 
 struct LevelFIFO {
@@ -39,6 +41,9 @@ public:
   virtual Tick best_bid() const = 0;
   virtual Tick best_ask() const = 0;
 
+  // Cache-hot pointer to current best level (nullptr if empty) for a side.
+  virtual LevelFIFO* best_level_ptr(Side s) = 0;
+
   // Top-of-book setters used by BookCore to mark emptiness/improvements
   virtual void set_best_bid(Tick px) = 0;
   virtual void set_best_ask(Tick px) = 0;
@@ -60,7 +65,9 @@ public:
       // allocate one LevelFIFO per tick in [min,max]
       levels_(static_cast<size_t>(band.max_tick - band.min_tick + 1)),
       best_bid_(std::numeric_limits<Tick>::min()),
-      best_ask_(std::numeric_limits<Tick>::max()) {}
+      best_ask_(std::numeric_limits<Tick>::max()),
+      best_bid_ptr_(nullptr),
+      best_ask_ptr_(nullptr) {}
 
   LevelFIFO& get_level(Tick px) override { return levels_[idx(px)]; }
 
@@ -72,8 +79,18 @@ public:
   Tick best_bid() const override { return best_bid_; }
   Tick best_ask() const override { return best_ask_; }
 
-  void set_best_bid(Tick px) override { best_bid_ = px; }
-  void set_best_ask(Tick px) override { best_ask_ = px; }
+  LevelFIFO* best_level_ptr(Side s) override {
+    return (s == Side::Bid) ? best_bid_ptr_ : best_ask_ptr_;
+  }
+
+  void set_best_bid(Tick px) override {
+    best_bid_ = px;
+    best_bid_ptr_ = (px == std::numeric_limits<Tick>::min()) ? nullptr : &levels_[idx(px)];
+  }
+  void set_best_ask(Tick px) override {
+    best_ask_ = px;
+    best_ask_ptr_ = (px == std::numeric_limits<Tick>::max()) ? nullptr : &levels_[idx(px)];
+  }
 
   void for_each_order(const std::function<void(Tick, OrderNode*)>& fn) const override {
     for (Tick px = band_.min_tick; px <= band_.max_tick; ++px) {
@@ -98,6 +115,8 @@ private:
   std::vector<LevelFIFO> levels_;
   Tick                   best_bid_;
   Tick                   best_ask_;
+  LevelFIFO*             best_bid_ptr_;
+  LevelFIFO*             best_ask_ptr_;
 };
 
 // -------- Sparse map for wide/unknown bands --------
@@ -113,8 +132,20 @@ public:
   Tick best_bid() const override { return best_bid_; }
   Tick best_ask() const override { return best_ask_; }
 
-  void set_best_bid(Tick px) override { best_bid_ = px; }
-  void set_best_ask(Tick px) override { best_ask_ = px; }
+  LevelFIFO* best_level_ptr(Side s) override {
+    return (s == Side::Bid) ? best_bid_ptr_ : best_ask_ptr_;
+  }
+
+  void set_best_bid(Tick px) override {
+    best_bid_ = px;
+    if (px == std::numeric_limits<Tick>::min()) { best_bid_ptr_ = nullptr; return; }
+    best_bid_ptr_ = &map_[px]; // existing top must be present
+  }
+  void set_best_ask(Tick px) override {
+    best_ask_ = px;
+    if (px == std::numeric_limits<Tick>::max()) { best_ask_ptr_ = nullptr; return; }
+    best_ask_ptr_ = &map_[px];
+  }
 
   void for_each_order(const std::function<void(Tick, OrderNode*)>& fn) const override {
     for (const auto& kv : map_) {
@@ -136,8 +167,10 @@ public:
 
 private:
   std::unordered_map<Tick, LevelFIFO> map_; // (later: absl::flat_hash_map)
-  Tick best_bid_{std::numeric_limits<Tick>::min()};
-  Tick best_ask_{std::numeric_limits<Tick>::max()};
+  Tick        best_bid_{std::numeric_limits<Tick>::min()};
+  Tick        best_ask_{std::numeric_limits<Tick>::max()};
+  LevelFIFO*  best_bid_ptr_{nullptr};
+  LevelFIFO*  best_ask_ptr_{nullptr};
 };
 
 } // namespace lob

@@ -23,66 +23,75 @@ void BookCore::refresh_best_after_depletion(Side s) {
   }
 }
 
-// Core matching: consume from opposite while price crosses and qty remains
-Quantity BookCore::match_against(Side taker_side, Quantity qty, Tick px_limit,
-                                 OrderId taker_order_id, UserId taker_user,
-                                 Timestamp ts, bool enable_stp) {
+// -------- Branch-minimized, side-specialized taker matching --------
+template<bool IsBid>
+Quantity BookCore::match_against_side(Quantity qty, Tick px_limit,
+                                      OrderId taker_order_id, UserId taker_user,
+                                      Timestamp ts, bool enable_stp) {
   Quantity filled = 0;
-  auto& opp = (taker_side == Side::Bid) ? asks_ : bids_;
+  auto& opp = IsBid ? asks_ : bids_;
 
   const Tick MINP = std::numeric_limits<Tick>::min();
   const Tick MAXP = std::numeric_limits<Tick>::max();
 
   auto crosses = [&](Tick best_px) -> bool {
-    return taker_side == Side::Bid ? (best_px <= px_limit) : (best_px >= px_limit);
+    if constexpr (IsBid) return best_px <= px_limit;
+    else                  return best_px >= px_limit;
   };
 
   while (qty > 0) {
-    Tick best_px = (taker_side == Side::Bid) ? opp.best_ask() : opp.best_bid();
-    if ((taker_side == Side::Bid && best_px == MAXP) ||
-        (taker_side == Side::Ask && best_px == MINP)) break;
+    // cache-hot: pointer to best level (no map lookup in the hot loop)
+    LevelFIFO* Lp = opp.best_level_ptr(IsBid ? Side::Ask : Side::Bid);
+    Tick best_px = IsBid ? opp.best_ask() : opp.best_bid();
+    if ((IsBid && best_px == MAXP) || (!IsBid && best_px == MINP)) break;
+    if (!Lp) { refresh_best_after_depletion(IsBid ? Side::Ask : Side::Bid); continue; }
     if (!crosses(best_px)) break;
 
-    LevelFIFO& L = opp.get_level(best_px);
+    LevelFIFO& L = *Lp;
     OrderNode* h = L.head;
-    if (!h) {
-      // level empty but best says otherwise: recompute and continue
-      refresh_best_after_depletion((taker_side==Side::Bid)?Side::Ask:Side::Bid);
-      continue;
-    }
+    if (!h) { refresh_best_after_depletion(IsBid ? Side::Ask : Side::Bid); continue; }
 
     // Self-Trade Prevention: cancel resting same-owner if enabled
     if (enable_stp && h->user == taker_user) {
       erase(L, h);
       if (logger_) logger_->log_cancel(h->id, ts);
       id_index_.erase(h->id);
-      delete h;
-      if (!L.head) refresh_best_after_depletion((taker_side==Side::Bid)?Side::Ask:Side::Bid);
+      free_node(h);
+      if (!L.head) refresh_best_after_depletion(IsBid ? Side::Ask : Side::Bid);
       continue;
     }
 
-    const Quantity tr = std::min(qty, h->qty);
+    const Quantity tr = (h->qty <= qty) ? h->qty : qty;
     h->qty      -= tr;
     L.total_qty -= tr;
     filled      += tr;
     qty         -= tr;
 
     if (logger_) {
-      Side passive_side = (taker_side == Side::Bid) ? Side::Ask : Side::Bid;
+      Side passive_side = IsBid ? Side::Ask : Side::Bid;
       logger_->log_fill(best_px, tr, passive_side, h->id, taker_order_id, ts);
     }
 
     if (h->qty == 0) {
       erase(L, h);
       id_index_.erase(h->id);
-      delete h;
+      free_node(h);
       if (!L.head) {
-        refresh_best_after_depletion((taker_side==Side::Bid)?Side::Ask:Side::Bid);
+        refresh_best_after_depletion(IsBid ? Side::Ask : Side::Bid);
       }
     }
   }
 
   return filled;
+}
+
+// Generic entry (kept for callers needing runtime side)
+Quantity BookCore::match_against(Side taker_side, Quantity qty, Tick px_limit,
+                                 OrderId taker_order_id, UserId taker_user,
+                                 Timestamp ts, bool enable_stp) {
+  return (taker_side == Side::Bid)
+    ? match_against_side<true>(qty, px_limit, taker_order_id, taker_user, ts, enable_stp)
+    : match_against_side<false>(qty, px_limit, taker_order_id, taker_user, ts, enable_stp);
 }
 
 ExecResult BookCore::submit_market(const NewOrder& o) {
@@ -94,28 +103,29 @@ ExecResult BookCore::submit_market(const NewOrder& o) {
 
   if (logger_) logger_->log_new(o, /*is_limit=*/false, bound, o.ts);
 
-  r.filled    = match_against(o.side, o.qty, bound, o.id, o.user, o.ts, (o.flags & STP) != 0u);
+  r.filled    = (o.side == Side::Bid)
+    ? match_against_side<true> (o.qty, bound, o.id, o.user, o.ts, (o.flags & STP) != 0u)
+    : match_against_side<false>(o.qty, bound, o.id, o.user, o.ts, (o.flags & STP) != 0u);
   r.remaining = o.qty - r.filled;
 
   if (logger_) logger_->on_book_after_event(o.ts);
   return r;
 }
 
-ExecResult BookCore::submit_limit(const NewOrder& o) {
+// -------- Side-specialized limit submit --------
+template<bool IsBid>
+ExecResult BookCore::submit_limit_side(const NewOrder& o) {
   ExecResult r{};
   if (o.qty <= 0) return r;
 
   // FOK: compute available up to price bound
   if ((o.flags & FOK) != 0u) {
     Quantity need = o.qty;
-    auto& opp = (o.side == Side::Bid) ? asks_ : bids_;
+    auto& opp = IsBid ? asks_ : bids_;
     Quantity avail = 0;
     opp.for_each_nonempty([&](Tick px, const LevelFIFO& L){
-      if (o.side == Side::Bid) {
-        if (px <= o.price) avail += L.total_qty;
-      } else {
-        if (px >= o.price) avail += L.total_qty;
-      }
+      if constexpr (IsBid) { if (px <= o.price) avail += L.total_qty; }
+      else                 { if (px >= o.price) avail += L.total_qty; }
     });
     if (avail < need) {
       if (logger_) logger_->log_new(o, /*is_limit=*/true, o.price, o.ts);
@@ -127,8 +137,8 @@ ExecResult BookCore::submit_limit(const NewOrder& o) {
 
   // Minimal POST_ONLY: reject if it would cross (no trade, no rest)
   if ((o.flags & POST_ONLY) != 0u) {
-    Tick opp_best = (o.side == Side::Bid) ? asks_.best_ask() : bids_.best_bid();
-    bool would_cross = (o.side == Side::Bid) ? (opp_best <= o.price) : (opp_best >= o.price);
+    Tick opp_best = IsBid ? asks_.best_ask() : bids_.best_bid();
+    bool would_cross = IsBid ? (opp_best <= o.price) : (opp_best >= o.price);
     if (would_cross) {
       if (logger_) logger_->log_new(o, /*is_limit=*/true, o.price, o.ts);
       r.remaining = o.qty;
@@ -139,36 +149,49 @@ ExecResult BookCore::submit_limit(const NewOrder& o) {
 
   if (logger_) logger_->log_new(o, /*is_limit=*/true, o.price, o.ts);
 
-  Quantity filled = match_against(o.side, o.qty, o.price,
-                                  o.id, o.user, o.ts, (o.flags & STP) != 0u);
+  Quantity filled = match_against_side<IsBid>(
+      o.qty, o.price, o.id, o.user, o.ts, (o.flags & STP) != 0u);
 
   // IOC: don't rest leftovers
-  if ((o.flags & IOC) != 0u) { r.filled = filled; r.remaining = o.qty - filled; if (logger_) logger_->on_book_after_event(o.ts); return r; }
+  if ((o.flags & IOC) != 0u) {
+    r.filled = filled;
+    r.remaining = o.qty - filled;
+    if (logger_) logger_->on_book_after_event(o.ts);
+    return r;
+  }
 
   Quantity leftover = o.qty - filled;
-  if (leftover <= 0) { r.filled = filled; r.remaining = 0; if (logger_) logger_->on_book_after_event(o.ts); return r; }
+  if (leftover <= 0) {
+    r.filled = filled; r.remaining = 0;
+    if (logger_) logger_->on_book_after_event(o.ts);
+    return r;
+  }
 
-  auto& same = (o.side == Side::Bid) ? bids_ : asks_;
+  auto& same = IsBid ? bids_ : asks_;
   LevelFIFO& L = same.get_level(o.price);
 
-  OrderNode* n = new OrderNode{
-      /*id*/ o.id, /*user*/ o.user, /*qty*/ leftover,
-      /*ts*/ o.ts, /*flags*/ o.flags, /*prev*/ nullptr, /*next*/ nullptr
-  };
+  OrderNode* n = alloc_node();
+  n->id = o.id; n->user = o.user; n->qty = leftover; n->ts = o.ts; n->flags = o.flags;
+  n->prev = n->next = nullptr;
   enqueue(L, n);
 
-  if (o.side == Side::Bid) {
+  if constexpr (IsBid) {
     if (o.price > same.best_bid()) same.set_best_bid(o.price);
   } else {
     if (o.price < same.best_ask()) same.set_best_ask(o.price);
   }
 
-  id_index_[o.id] = IdEntry{ o.side, o.price, n };
+  id_index_[o.id] = IdEntry{ IsBid ? Side::Bid : Side::Ask, o.price, n };
   r.filled = filled;
   r.remaining = leftover;
 
   if (logger_) logger_->on_book_after_event(o.ts);
   return r;
+}
+
+ExecResult BookCore::submit_limit(const NewOrder& o) {
+  return (o.side == Side::Bid) ? submit_limit_side<true>(o)
+                               : submit_limit_side<false>(o);
 }
 
 bool BookCore::cancel(OrderId id) {
@@ -182,7 +205,7 @@ bool BookCore::cancel(OrderId id) {
   if (!n) return false;
 
   erase(L, n);
-  delete n;
+  free_node(n);
   id_index_.erase(it);
 
   if (logger_) logger_->log_cancel(id, /*ts*/0);
@@ -218,11 +241,12 @@ ExecResult BookCore::modify(const ModifyOrder& m) {
 
   // If price improves and crosses, trade first (unless POST_ONLY forbids)
   auto opp_best = (e.side == Side::Bid) ? asks_.best_ask() : bids_.best_bid();
-  auto crosses_now = (e.side == Side::Bid) ? (opp_best <= new_px) : (opp_best >= new_px);
+  bool crosses_now = (e.side == Side::Bid) ? (opp_best <= new_px) : (opp_best >= new_px);
 
   if (crosses_now && n->qty > 0 && ((n->flags & POST_ONLY) == 0u)) {
-    Quantity took = match_against(e.side, n->qty, new_px,
-                                  n->id, n->user, n->ts, (n->flags & STP) != 0u);
+    Quantity took = (e.side == Side::Bid)
+      ? match_against_side<true>(n->qty, new_px, n->id, n->user, n->ts, (n->flags & STP) != 0u)
+      : match_against_side<false>(n->qty, new_px, n->id, n->user, n->ts, (n->flags & STP) != 0u);
     n->qty -= took;
     r.filled += took;
   }
@@ -242,7 +266,7 @@ ExecResult BookCore::modify(const ModifyOrder& m) {
     r.remaining = n->qty;
   } else {
     // Fully consumed or IOC: destroy node, drop from index
-    delete n;
+    free_node(n);
     id_index_.erase(it);
     r.remaining = 0;
   }
@@ -267,5 +291,11 @@ void BookCore::rebuild_index_from_books() {
     }
   });
 }
+
+// Explicit instantiations for the template members we defined in this TU
+template Quantity BookCore::match_against_side<true >(Quantity, Tick, OrderId, UserId, Timestamp, bool);
+template Quantity BookCore::match_against_side<false>(Quantity, Tick, OrderId, UserId, Timestamp, bool);
+template ExecResult BookCore::submit_limit_side<true >(const NewOrder&);
+template ExecResult BookCore::submit_limit_side<false>(const NewOrder&);
 
 } // namespace lob
