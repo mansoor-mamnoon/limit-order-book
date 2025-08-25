@@ -1,5 +1,5 @@
 from hypothesis import given, strategies as st
-from lob import Book, NewOrder, Side
+from olob import Book, NewOrder, Side
 
 def mk(seq, ts, oid, uid, side, px, qty, flags=0):
     o = NewOrder()

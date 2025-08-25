@@ -2,7 +2,8 @@ cmake_minimum_required(VERSION 3.21)
 project(lob LANGUAGES CXX)
 
 # ---------------- Options ----------------
-option(LOB_ENABLE_ASAN "Enable AddressSanitizer in Debug" ON)
+option(LOB_ENABLE_ASAN   "Enable AddressSanitizer in Debug" ON)
+option(LOB_BUILD_TESTS   "Build C++ tests (requires Catch2)" OFF)  # <--- default OFF for standalone build
 
 # ---------------- Global defaults ----------------
 set(CMAKE_CXX_STANDARD 20)
@@ -45,12 +46,11 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   target_compile_options(lob_util PRIVATE -O2)
 endif()
 
-# ---------------- Replay tool ----------------
+# ---------------- Tools ----------------
 add_executable(replay_tool tools/replay.cpp)
 target_link_libraries(replay_tool PRIVATE lob_core lob_util)
 target_include_directories(replay_tool PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-# ---------------- Benchmark tool ----------------
 add_executable(bench_tool tools/bench.cpp)
 target_link_libraries(bench_tool PRIVATE lob_core lob_util)
 target_include_directories(bench_tool PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -58,46 +58,55 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   target_compile_options(bench_tool PRIVATE -O3 -march=native)
 endif()
 
-# ---------------- Tests ----------------
-# Catch2 is provided by top-level via FetchContent and exposes Catch2::Catch2WithMain
-add_executable(lob_tests
-  tests/test_types.cpp
-  tests/test_price_levels.cpp
-  tests/test_headers_compile.cpp
-  tests/test_fifo_same_price.cpp
-  tests/test_partial_empty_onesided.cpp
-  tests/test_modify_price.cpp
-  tests/test_stp.cpp
-  tests/test_market_sweep.cpp
-  tests/test_replay_golden.cpp
-)
-
-# Tests need public headers
-target_include_directories(lob_tests PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-
-target_link_libraries(lob_tests PRIVATE
-  lob_core
-  lob_util
-  Catch2::Catch2WithMain
-)
-
-add_test(NAME lob_tests COMMAND lob_tests)
+# ---------------- Tests (optional) ----------------
+# When building this 'cpp' dir standalone, Catch2 may not be provided by parent.
+# Only attempt tests if explicitly requested AND Catch2 is found.
+if(LOB_BUILD_TESTS)
+  find_package(Catch2 3 QUIET CONFIG)
+  if (Catch2_FOUND)
+    enable_testing()
+    add_executable(lob_tests
+      tests/test_types.cpp
+      tests/test_price_levels.cpp
+      tests/test_headers_compile.cpp
+      tests/test_fifo_same_price.cpp
+      tests/test_partial_empty_onesided.cpp
+      tests/test_modify_price.cpp
+      tests/test_stp.cpp
+      tests/test_market_sweep.cpp
+      tests/test_replay_golden.cpp
+    )
+    target_include_directories(lob_tests PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    target_link_libraries(lob_tests PRIVATE
+      lob_core
+      lob_util
+      Catch2::Catch2WithMain
+    )
+    add_test(NAME lob_tests COMMAND lob_tests)
+    if(LOB_ENABLE_ASAN AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+      if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+        target_compile_options(lob_tests PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+        target_link_options   (lob_tests PRIVATE -fsanitize=address)
+      endif()
+    endif()
+  else()
+    message(STATUS "LOB_BUILD_TESTS=ON but Catch2 not found; skipping C++ tests.")
+  endif()
+endif()
 
 # ---------------- Sanitizers in Debug only ----------------
 if(LOB_ENABLE_ASAN AND CMAKE_BUILD_TYPE STREQUAL "Debug")
   if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     target_compile_options(lob_core  PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options   (lob_core  PRIVATE -fsanitize=address)
-    target_compile_options(lob_tests PRIVATE -fsanitize=address -fno-omit-frame-pointer)
-    target_link_options   (lob_tests PRIVATE -fsanitize=address)
   endif()
 endif()
 
-# ---------------- pybind11 bindings ----------------
+# ---------------- pybind11 module (for direct builds) ----------------
 include(FetchContent)
-# Avoid double-declare if outer project already brought it in
+# Bring in pybind11 if not provided by a parent project
 if(NOT TARGET pybind11::module)
   FetchContent_Declare(
     pybind11
@@ -108,26 +117,22 @@ if(NOT TARGET pybind11::module)
 endif()
 
 pybind11_add_module(lob_cpp MODULE
-  ../python/lob/_bindings.cpp
+  ../python/olob/_bindings.cpp
 )
 target_link_libraries(lob_cpp PRIVATE lob_core lob_util)
 target_include_directories(lob_cpp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   target_compile_options(lob_cpp PRIVATE -O3 -march=native -fvisibility=hidden)
 endif()
-
-# The Python module filename will be "_lob.*" and must live inside package "lob".
 set_target_properties(lob_cpp PROPERTIES OUTPUT_NAME "_lob")
 
-# scikit-build-core will place this into site-packages/lob thanks to the DESTINATION below.
-# On *nix, shared library extension is LIBRARY; on Windows it's RUNTIME.
+# Install into the Python package 'olob' (library on Unix, runtime on Windows)
 if(WIN32)
-  install(TARGETS lob_cpp RUNTIME DESTINATION lob)
+  install(TARGETS lob_cpp RUNTIME DESTINATION olob)
   install(TARGETS bench_tool RUNTIME DESTINATION Scripts)
   install(TARGETS replay_tool RUNTIME DESTINATION Scripts)
 else()
-  install(TARGETS lob_cpp LIBRARY DESTINATION lob)
+  install(TARGETS lob_cpp LIBRARY DESTINATION olob)
   install(TARGETS bench_tool RUNTIME DESTINATION bin)
   install(TARGETS replay_tool RUNTIME DESTINATION bin)
 endif()

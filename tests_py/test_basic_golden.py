@@ -1,4 +1,4 @@
-from lob import Book, NewOrder, ModifyOrder, Side, STP, POST_ONLY
+from olob import Book, NewOrder, ModifyOrder, Side, STP, POST_ONLY
 
 def mk(ts, oid, uid, side, px, qty, flags=0, seq=0):
     o = NewOrder()
