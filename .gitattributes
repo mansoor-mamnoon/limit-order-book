@@ -1,2 +1,28 @@
-# Force Linguist to recognize C++ source
-cpp/* linguist-language=C++
+# --- Force C++ classification for engine sources ---
+cpp/** linguist-language=C++
+cpp/** -linguist-vendored
+cpp/** -linguist-generated
+
+# If you have any C++ in python/ (e.g., pybind11 bindings), make sure it's counted as C++
+python/**/_bindings.cpp linguist-language=C++
+python/**/_*.cpp       linguist-language=C++
+
+# --- De-emphasize packaging & Python scaffolding (optional) ---
+# Mark pure packaging/config and Python scaffolding as vendored so it won't dominate %
+pyproject.toml linguist-vendored
+setup.cfg      linguist-vendored
+setup.py       linguist-vendored
+requirements.txt linguist-vendored
+python/**      linguist-vendored
+
+# Keep your README and docs from skewing stats
+docs/**                 linguist-documentation
+**/*.md                 linguist-documentation
+
+# Ignore build artifacts and generated files in stats
+build/**                linguist-vendored
+dist/**                 linguist-vendored
+*.egg-info/**           linguist-vendored
+**/__pycache__/**       linguist-vendored
+**/*.pyc                linguist-vendored
+**/*.ipynb              linguist-vendored
