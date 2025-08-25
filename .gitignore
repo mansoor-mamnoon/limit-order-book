@@ -7,3 +7,8 @@
 .DS_Store
 *.pyc
 __pycache__/
+raw/
+parquet/
+*.json.gz
+*.jsonl.gz
+

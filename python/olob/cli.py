@@ -1,9 +1,19 @@
+# python/olob/cli.py
+from __future__ import annotations
+
 import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+from datetime import datetime, timezone
+from typing import Optional
+
 import click
+
+# Day 8: crypto connectors (make sure these modules exist under python/olob/crypto/)
+from olob.crypto.binance import run_capture as _binance_capture
+from olob.crypto.common import normalize_day as _normalize_day
 
 
 @click.group(help="LOB utilities")
@@ -12,11 +22,15 @@ def cli() -> None:
     pass
 
 
-def _existing(p: Path) -> str | None:
+# ---------------------------
+# Existing benchmark command
+# ---------------------------
+
+def _existing(p: Path) -> Optional[str]:
     return str(p) if p.is_file() and os.access(p, os.X_OK) else None
 
 
-def _find_bench_tool() -> str | None:
+def _find_bench_tool() -> Optional[str]:
     # 1) PATH
     exe = shutil.which("bench_tool")
     if exe:
@@ -73,7 +87,6 @@ def bench(msgs: float) -> None:
         raise click.Abort()
 
     n = str(int(msgs))
-    # Try the most common CLI shapes used by benchmark tools
     trials = [
         [exe, "--msgs", n],
         [exe, "--num", n],
@@ -81,7 +94,7 @@ def bench(msgs: float) -> None:
         [exe, n],  # positional
     ]
 
-    last_err: subprocess.CalledProcessError | None = None
+    last_err: Optional[subprocess.CalledProcessError] = None
     for args in trials:
         try:
             subprocess.check_call(args)
@@ -90,7 +103,6 @@ def bench(msgs: float) -> None:
             last_err = e
             continue
 
-    # If we reach here, all shapes failed
     click.secho("bench_tool failed with all known argument forms:", fg="red")
     for a in trials:
         click.echo("  $ " + " ".join(a))
@@ -99,6 +111,59 @@ def bench(msgs: float) -> None:
     click.echo("\nTry running the tool manually to see its usage/help:")
     click.echo(f"  $ {exe} --help  (or)  $ {exe}")
     raise click.Abort()
+
+
+# ---------------------------
+# Day 8 — crypto commands
+# ---------------------------
+
+@cli.command("crypto-capture", help="Capture depth diffs @100ms + trades (raw JSONL.GZ).")
+@click.option("--exchange", default="binance", show_default=True,
+              type=click.Choice(["binance", "binanceus"], case_sensitive=False),
+              help="Exchange to use")
+@click.option("--symbol", default="BTCUSDT", show_default=True, help="Trading pair symbol")
+@click.option("--minutes", default=60, show_default=True, type=int, help="How long to capture")
+@click.option("--raw-dir", default="raw", show_default=True, help="Root folder for raw output")
+@click.option("--snapshot-every-sec", default=600, show_default=True, type=int,
+              help="REST snapshot cadence (seconds)")
+def crypto_capture(exchange: str, symbol: str, minutes: int, raw_dir: str, snapshot_every_sec: int) -> None:
+    """
+    Starts a capture session:
+      - WebSocket: diff-depth(100ms) + trades
+      - REST: periodic depth snapshots
+      - Writes raw gzipped JSONL to raw/YYYY-MM-DD/<exchange>/<symbol>/{depth,trades}
+    """
+    _binance_capture(
+        symbol=symbol.upper(),
+        minutes=minutes,
+        raw_root=raw_dir,
+        snapshot_every_sec=snapshot_every_sec,
+        exchange=exchange.lower(),
+    )
+
+
+@cli.command("normalize", help="Normalize raw depth diffs + trades to Parquet {ts,side,price,qty,type}.")
+@click.option("--exchange", default="binance", show_default=True,
+              type=click.Choice(["binance", "binanceus"], case_sensitive=False),
+              help="Exchange that produced the raw files")
+@click.option("--date", default=None, help="UTC date YYYY-MM-DD (defaults to today UTC)")
+@click.option("--symbol", default="BTCUSDT", show_default=True, help="Symbol to normalize")
+@click.option("--raw-dir", default="raw", show_default=True, help="Raw input root")
+@click.option("--out-dir", default="parquet", show_default=True, help="Parquet output root")
+def normalize(exchange: str, date: Optional[str], symbol: str, raw_dir: str, out_dir: str) -> None:
+    """
+    Reads raw gzipped JSONL from raw/<date>/<exchange>/<symbol> and writes a single Parquet
+    at parquet/<date>/<exchange>/<symbol>/events.parquet with the schema:
+      ts:int64(ns UTC), side:str, price:float64, qty:float64, type:str
+    """
+    day = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    _normalize_day(
+        date_str=day,
+        exchange=exchange.lower(),
+        symbol=symbol.upper(),
+        raw_root=raw_dir,
+        out_root=out_dir,
+    )
 
 
 if __name__ == "__main__":

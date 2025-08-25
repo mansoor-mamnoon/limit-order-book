@@ -1,211 +1,254 @@
 # Limit Order Book (LOB) Engine — C++20
 
-A high‑performance C++ matching engine that processes buy/sell orders with exchange‑style semantics. The codebase showcases **low‑latency hot‑path design**, **cache‑friendly data structures**, **reproducible benchmarking**, and **clean build/test tooling**.
+A high-performance C++ matching engine that processes buy/sell orders with exchange-style semantics. The codebase demonstrates **low-latency hot-path design**, **cache-friendly data structures**, **reproducible benchmarking**, and **clean build/test tooling**.
 
 ---
 
 ## 🔎 Quick Highlights
 
 - **Core engine (`BookCore`)**: limit & market orders, cancels, modifies, FIFO per price level.
-- **Order flags**: `IOC`, `FOK`, `POST_ONLY`, `STP` (self‑trade prevention).
+- **Order flags**: `IOC`, `FOK`, `POST_ONLY`, `STP` (self-trade prevention).
 - **Persistence**: binary snapshots (write/load) + replay tool.
-- **Performance**: slab memory pool, branch elimination via side specialization, cache‑hot best‑level pointers, `-fno-exceptions -fno-rtti`.
+- **Performance**: slab memory pool, side-specialized matching (branch elimination), cache-hot best-level pointers, `-fno-exceptions -fno-rtti`.
 - **Tooling**: benchmark tool (percentiles + histogram CSVs), Catch2 unit tests, profiling toggle (`-fno-omit-frame-pointer -g`).
 
 ---
 
-## 🧭 Architecture (ASCII diagrams)
+## 🧭 Architecture
 
 **Engine flow**
-    
-    +-------------------+          +----------------+
-    |  Incoming Orders  |  ----->  |    BookCore    |
-    +-------------------+          |  (match/rest)  |
-                                   +--------+-------+
-                                            |
-                                            v
-    +--------------------+          +-------------------+
-    | PriceLevels (B/A)  |<-------->|   LevelFIFO(s)    |
-    | best_bid/ask +     |          |  intrusive queues |
-    | best_level_ptr     |          +-------------------+
-                                            |
-                                            v
-                                   +-------------------+
-                                   | Logger / Snapshot |
-                                   |  (events, trades) |
-                                   +-------------------+
+```text
++-------------------+          +----------------+
+|  Incoming Orders  |  ----->  |    BookCore    |
++-------------------+          |  (match/rest)  |
+                               +--------+-------+
+                                        |
+                                        v
++--------------------+          +-------------------+
+| PriceLevels (B/A)  |<-------->|   LevelFIFO(s)    |
+| best_bid/ask +     |          |  intrusive queues |
+| best_level_ptr     |          +-------------------+
+                                        |
+                                        v
+                               +-------------------+
+                               | Logger / Snapshot |
+                               |  (events, trades) |
+                               +-------------------+
+```
 
 **Data layout**
-    
-    Bids ladder (higher is better)        Asks ladder (lower is better)
-    best_bid --> [px=100][FIFO] -> ...    best_ask --> [px=101][FIFO] -> ...
+```text
+Bids ladder (higher is better)        Asks ladder (lower is better)
+best_bid --> [px=100][FIFO] -> ...    best_ask --> [px=101][FIFO] -> ...
 
-    LevelFIFO (intrusive):
-      head <-> node <-> node <-> ... <-> tail   (FIFO fairness, O(1) ops)
+LevelFIFO (intrusive):
+  head <-> node <-> node <-> ... <-> tail   (FIFO fairness, O(1) ops)
+```
 
 **Memory pool (slab allocator)**
-    
-    +------------------------- 1 MiB slab -------------------------+
-    | [OrderNode][OrderNode][OrderNode] ... [OrderNode]            |
-    +--------------------------------------------------------------+
-                          ^ free list (O(1) alloc/free)
+```text
++------------------------- 1 MiB slab -------------------------+
+| [OrderNode][OrderNode][OrderNode] ... [OrderNode]            |
++--------------------------------------------------------------+
+                      ^ free list (O(1) alloc/free)
+```
 
 ---
 
 ## 🗂️ Repository Layout
 
-    cpp/
-      include/lob/
-        book_core.hpp        # engine API & hot-path helpers
-        price_levels.hpp     # ladders: contiguous & sparse implementations
-        types.hpp            # Tick, Quantity, IDs, flags, enums
-        logging.hpp          # snapshot writer/loader, event logger interface
-        mempool.hpp          # slab allocator for OrderNode
-      src/
-        book_core.cpp        # engine implementation (side-specialized matching)
-        price_levels.cpp     # TU for headers (keeps targets happy)
-        logging.cpp          # snapshot I/O + logger implementation
-        util.cpp             # placeholder TU for lob_util
-      tools/
-        bench.cpp            # synthetic benchmark -> CSV + histogram
-        replay.cpp           # snapshot replay tool
-      CMakeLists.txt         # inner build (library + tools + tests)
-    docs/
-      bench.md               # benchmark method + sample results
-      bench.csv              # percentiles output (generated by bench_tool)
-      hist.csv               # latency histogram 0–100µs (generated)
-    python/
-      olob/_bindings.cpp     # pybind11 module (target: lob_cpp -> _lob)
-    CMakeLists.txt           # outer build (FetchContent Catch2; drives inner)
+```text
+cpp/
+  include/lob/
+    book_core.hpp        # engine API & hot-path helpers
+    price_levels.hpp     # ladders: contiguous & sparse implementations
+    types.hpp            # Tick, Quantity, IDs, flags, enums
+    logging.hpp          # snapshot writer/loader, event logger interface
+    mempool.hpp          # slab allocator for OrderNode
+  src/
+    book_core.cpp        # engine implementation (side-specialized matching)
+    price_levels.cpp     # TU for headers (keeps targets happy)
+    logging.cpp          # snapshot I/O + logger implementation
+    util.cpp             # placeholder TU for lob_util
+  tools/
+    bench.cpp            # synthetic benchmark -> CSV + histogram
+    replay.cpp           # snapshot replay tool
+  CMakeLists.txt         # inner build (library + tools + tests)
+docs/
+  bench.md               # benchmark method + sample results
+  bench.csv              # percentiles output (generated by bench_tool)
+  hist.csv               # latency histogram 0–100µs (generated)
+python/
+  olob/_bindings.cpp     # pybind11 module (target: lob_cpp -> _lob)
+CMakeLists.txt           # outer build (FetchContent Catch2; drives inner)
+```
 
 ---
 
 ## 🛠️ Build & Run
 
 **Configure & build (Release)**
-
-    rm -rf build
-    cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
-          -DLOB_BUILD_TESTS=ON -DLOB_PROFILING=ON
-    cmake --build build -j
+```bash
+rm -rf build
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+      -DLOB_BUILD_TESTS=ON -DLOB_PROFILING=ON
+cmake --build build -j
+```
 
 **CMake options**
-
-- `LOB_BUILD_TESTS` (ON/OFF): build Catch2 tests  
-- `LOB_PROFILING`  (ON/OFF): add `-fno-omit-frame-pointer -g` for clean profiler stacks  
-- `LOB_ENABLE_ASAN` (Debug only): AddressSanitizer for tests/tools  
-- `LOB_LTO` (Release only): optional `-flto`  
+- `LOB_BUILD_TESTS` (ON/OFF): build Catch2 tests.  
+- `LOB_PROFILING`  (ON/OFF): add `-fno-omit-frame-pointer -g` for clean profiler stacks.  
+- `LOB_ENABLE_ASAN` (Debug only): AddressSanitizer for tests/tools.  
+- `LOB_LTO` (Release only): optional `-flto`.
 
 **Unit tests**
-
-    ctest --test-dir build --output-on-failure
+```bash
+ctest --test-dir build --output-on-failure
+```
 
 **Benchmark (CSV + histogram)**
-
-    ./build/cpp/bench_tool --msgs 2000000 --warmup 50000 \
-      --out-csv docs/bench.csv --hist docs/hist.csv
-
+```bash
+./build/cpp/bench_tool --msgs 2000000 --warmup 50000 \
+  --out-csv docs/bench.csv --hist docs/hist.csv
+```
 Example output:
-
-    msgs=2000000, time=0.156s, rate=12854458.3 msgs/s
-    latency_us: p50=0.04 p90=0.08 p99=0.08 p99.9=0.12
-
+```text
+msgs=2000000, time=0.156s, rate=12854458.3 msgs/s
+latency_us: p50=0.04 p90=0.08 p99=0.08 p99.9=0.12
+```
 See `docs/bench.md`, `docs/bench.csv`, and `docs/hist.csv` for reproducible results.
 
 **Replay from snapshot**
-
-    ./build/cpp/replay_tool <snapshot.bin>
+```bash
+./build/cpp/replay_tool <snapshot.bin>
+```
 
 ---
 
-## 📚 Engine API (essentials)
+## 📚 Engine API (Essentials)
 
 **Types** (`include/lob/types.hpp`)
-- `Side { Bid, Ask }`, `Tick` (price), `Quantity`, `OrderId`, `UserId`, `Timestamp`, `SeqNo`
-- Flags: `IOC`, `FOK`, `POST_ONLY`, `STP`
+- `Side { Bid, Ask }`, `Tick` (price), `Quantity`, `OrderId`, `UserId`, `Timestamp`, `SeqNo`.
+- Flags: `IOC`, `FOK`, `POST_ONLY`, `STP`.
 
 **Orders / results**
-- `NewOrder { seq, ts, id, user, side, price, qty, flags }`
-- `ModifyOrder { seq, ts, id, new_price, new_qty, flags }`
-- `ExecResult { filled, remaining }`
+- `NewOrder { seq, ts, id, user, side, price, qty, flags }`.
+- `ModifyOrder { seq, ts, id, new_price, new_qty, flags }`.
+- `ExecResult { filled, remaining }`.
 
 **BookCore** (`include/lob/book_core.hpp`)
-- `ExecResult submit_limit(const NewOrder&)`
-- `ExecResult submit_market(const NewOrder&)`
-- `bool       cancel(OrderId id)`
-- `ExecResult modify(const ModifyOrder&)`
+- `ExecResult submit_limit(const NewOrder&)`.
+- `ExecResult submit_market(const NewOrder&)`.
+- `bool       cancel(OrderId id)`.
+- `ExecResult modify(const ModifyOrder&)`.
 
 **Ladders** (`include/lob/price_levels.hpp`)
-- `PriceLevelsContig(PriceBand)` — contiguous array for bounded tick ranges
-- `PriceLevelsSparse` — `unordered_map<Tick, LevelFIFO>` for unbounded ranges
-- Both expose `best_bid()/best_ask()` and **cache‑hot** `best_level_ptr(Side)`
+- `PriceLevelsContig(PriceBand)` — contiguous array for bounded tick ranges.  
+- `PriceLevelsSparse` — `unordered_map<Tick, LevelFIFO>` for unbounded ranges.  
+- Both expose `best_bid()/best_ask()` and **cache-hot** `best_level_ptr(Side)`.
 
 **Snapshots & logging** (`include/lob/logging.hpp`, `src/logging.cpp`)
-- `SnapshotWriter::write_snapshot(...)`
-- `load_snapshot_file(...)`
-- `IEventLogger` + `JsonlBinLogger` (jsonl + binary events/trades; optional snapshots)
+- `SnapshotWriter::write_snapshot(...)`.
+- `load_snapshot_file(...)`.
+- `IEventLogger` + `JsonlBinLogger` (jsonl + binary events/trades; optional snapshots).
 
 ---
 
 ## ⚙️ Design & Performance Choices
 
 - **Slab allocator (arena)**  
-  Hot‑path `OrderNode` allocations use a slab pool (O(1) alloc/free) → no `new/delete` in matching.  
-  Nodes carry an `alloc_kind` tag so snapshot‑loaded nodes still free safely with `delete`.
-
+  Hot-path `OrderNode` allocations use a slab pool (O(1) alloc/free) — no `new/delete` inside matching. Snapshot-loaded nodes carry an `alloc_kind` tag to free safely.
 - **Branch elimination**  
-  Side‑specialized templates (`match_against_side<true/false>`, `submit_limit_side<...>`) remove per‑iteration `if (side)` in the inner loop.
-
-- **Cache‑hot top‑of‑book**  
-  Ladders maintain both the **best price** and a **pointer to the best level**; the matcher touches a single pointer to minimize cache misses.
-
+  Side-specialized templates (e.g., `match_against_side<true/false>`) remove per-iteration `if (side)` in the inner loop.
+- **Cache-hot top-of-book**  
+  Ladders maintain both the best price and a pointer to the best level; the matcher dereferences a single pointer to minimize cache misses.
 - **Lean binary**  
-  Compiles with `-fno-exceptions -fno-rtti -O3 -march=native -fvisibility=hidden` on the hot path.
-
+  Hot path compiled with `-fno-exceptions -fno-rtti -O3 -march=native -fvisibility=hidden`.
 - **Deterministic FIFO**  
-  Intrusive doubly‑linked list per price (`LevelFIFO`) preserves arrival order with O(1) enqueue/dequeue.
-
+  Intrusive doubly-linked `LevelFIFO` per price ensures strict time priority with O(1) enqueue/dequeue.
 - **Reproducibility**  
-  Bench tool emits percentiles + histogram CSVs; `docs/bench.md` captures method, command line, and host/compiler.
+  Bench tool emits percentiles + histogram CSVs; docs capture methodology and command lines.
 
 ---
 
-## 🧪 Minimal Integration (example)
+## 🧪 Minimal Integration (C++)
 
-    using namespace lob;
-    PriceLevelsSparse bids, asks;
-    BookCore book(bids, asks, /*logger*/nullptr);
+```cpp
+using namespace lob;
+PriceLevelsSparse bids, asks;
+BookCore book(bids, asks, /*logger*/nullptr);
 
-    NewOrder o{1, 0, 42, 7, Side::Bid, 1000, 10, 0};
-    auto r1 = book.submit_limit(o);   // may trade or rest at 1000
-    auto ok = book.cancel(42);        // cancel by ID
+NewOrder o{1, 0, 42, 7, Side::Bid, 1000, 10, 0};
+auto r1 = book.submit_limit(o);   // may trade or rest at 1000
+auto ok = book.cancel(42);        // cancel by ID
+```
 
 ---
 
 ## 🔬 Profiling
 
 **Linux (perf)**
-
-    perf stat -d ./build/cpp/bench_tool --msgs 2000000
-    perf record -g -- ./build/cpp/bench_tool --msgs 2000000
-    perf report
+```bash
+perf stat -d ./build/cpp/bench_tool --msgs 2000000
+perf record -g -- ./build/cpp/bench_tool --msgs 2000000
+perf report
+```
 
 **macOS (Instruments)**  
-Time Profiler with frame pointers (`-DLOB_PROFILING=ON`).
+Use Time Profiler with frame pointers (`-DLOB_PROFILING=ON`).
 
-Focus on: best‑level maintenance, LevelFIFO ops, and any accidental allocations.
+Focus on: best-level maintenance, LevelFIFO ops, accidental allocations.
 
 ---
 
-## 🎯 What This Demonstrates
+## 🌐 Crypto Data Connector
 
-- Low‑latency C++ hot‑path engineering (arenas, branch minimization, cache locality)  
-- Exchange‑grade semantics (FIFO fairness, order flags, STP, cancel/modify)  
-- Measurement discipline (benchmarks, CSV artifacts, reproducible docs)  
-- Production‑minded build system (tests, sanitizers, profiling, optional LTO) with future Python bindings via `pybind11`
+A **Python CLI** ships alongside the C++ engine to capture and normalize live exchange data.
 
-If you’re exploring the code, start here:
-- `cpp/include/lob/book_core.hpp`
-- `cpp/include/lob/price_levels.hpp`
-- `cpp/tools/bench.cpp`
-- `docs/bench.md`
+**Capture raw Binance US data**
+```bash
+lob crypto-capture --exchange binanceus --symbol BTCUSDT \
+  --minutes 2 --raw-dir raw --snapshot-every-sec 60
+```
+- Connects to Binance US WebSocket streams (`diffDepth`, `trade`).  
+- Pulls a REST snapshot every N seconds (`--snapshot-every-sec`).  
+- Persists gzipped JSONL to:
+```text
+raw/YYYY-MM-DD/<exchange>/<symbol>/…
+```
+
+**Normalize into Parquet**
+```bash
+lob normalize --exchange binanceus --date $(date -u +%F) \
+  --symbol BTCUSDT --raw-dir raw --out-dir parquet
+```
+- Produces:
+```text
+parquet/YYYY-MM-DD/binanceus/BTCUSDT/events.parquet
+```
+
+**Schema**
+- `ts` → event timestamp (ns, UTC)  
+- `side` → `"B"` (bid) or `"A"` (ask)  
+- `price` → price level  
+- `qty` → size traded or resting  
+- `type` → `"book"` (order book update) or `"trade"`
+
+**Inspect with pandas**
+```python
+import pandas as pd
+df = pd.read_parquet("parquet/2025-08-24/binanceus/BTCUSDT/events.parquet")
+print(df.head())
+print(df.dtypes)
+print(len(df))
+```
+Analyze millions of events efficiently in Python.
+
+---
+
+## 🎯 Summary
+
+- **Low-latency hot path**: arenas, branch minimization, cache locality.  
+- **Exchange semantics**: FIFO fairness, flags (`IOC/FOK/POST_ONLY/STP`), cancel/modify.  
+- **Measurement discipline**: benchmarks with CSV artifacts and reproducible docs.  
+- **Practical integration**: replayable snapshots and a Python data connector for real-world feeds.
