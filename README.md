@@ -370,6 +370,7 @@ EOF
 python python/csv_to_parquet.py --in taq_quotes.csv --out taq_quotes.parquet
 python python/csv_to_parquet.py --in taq_trades.csv --out taq_trades.parquet
 
+```
 
 ## 🎯 Summary
 
