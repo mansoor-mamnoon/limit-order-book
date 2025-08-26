@@ -20,18 +20,20 @@ dependencies = [
   "aiohttp>=3.9",
   "pandas>=2.2.0",
   "pyarrow>=16.1.0",
+  "matplotlib>=3.8.0",      # <- needed for plots in metrics/report
+  "scikit-learn>=1.4; python_version >= '3.9'",  
   "certifi>=2024.0.0",
 ]
 
+
 [project.optional-dependencies]
 tests = ["pytest>=8.0", "hypothesis>=6.98"]
+analytics = ["matplotlib>=3.8.0", "scikit-learn>=1.4"]
 
 [project.scripts]
-# keep your single entry point; new Day 8 commands live under this Typer app
-lob = "olob.cli:cli"
+lob = "olob.cli:cli"   # keep a single entry point; add `analyze` as a subcommand
 
 [tool.scikit-build]
-# CRITICAL: include only the package directory to avoid namespace collisions
 wheel.packages = ["python/olob"]
 cmake.verbose = true
 wheel.expand-macos-universal-tags = true

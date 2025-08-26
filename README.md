@@ -480,6 +480,49 @@ python -m olob.microstructure \
 
 ---
 
+## 📑 HTML Report Generator
+
+A single command produces a **self-contained HTML report** with plots and stats from captured market data.
+
+---
+
+### 🔧 Usage
+```bash
+lob analyze --exchange binanceus --symbol BTCUSDT \
+  --date 2025-08-25 --hour-start 03:00
+```
+
+---
+
+### 📋 What it does
+- Slices a **1-hour window** from normalized Parquet data.  
+- Replays events through the native **`replay_tool`** to generate TAQ-style quotes & trades.  
+- Runs analytics: **spread, microprice, imbalance, depth**.  
+- Runs microstructure metrics: **realized volatility, impact curves, order-flow autocorr, imbalance drift, clustering**.  
+- Emits a single HTML file with embedded PNGs + JSON stats:  
+  ```
+  out/reports/2025-08-25_BTCUSDT.html
+  ```
+
+---
+
+### 📈 Sample Output (report sections)
+- Spread over time  
+- Mid vs Microprice  
+- Best-level imbalance (L1)  
+- Depth (bid/ask top-10)  
+- Realized Volatility  
+- Impact Curves  
+- Order-Flow Autocorrelation  
+- Drift vs Imbalance  
+- Impact Clusters  
+
+---
+
+### 🌐 Portability
+The HTML report is fully **self-contained** — just open it in any browser, no external files needed.
+
+
 ## 🎯 Summary
 
 - **Low-latency hot path**: arenas, branch minimization, cache locality.  

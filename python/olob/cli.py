@@ -165,6 +165,42 @@ def normalize(exchange: str, date: Optional[str], symbol: str, raw_dir: str, out
         out_root=out_dir,
     )
 
+# --- add near the top with other imports ---
+from . import analyze as _analyze
+
+# --- add near the bottom, before __main__ ---
+@cli.command("analyze", help="Generate a self-contained HTML report with plots + stats.")
+@click.option("--exchange", default="binanceus", show_default=True)
+@click.option("--symbol", default="BTCUSDT", show_default=True)
+@click.option("--date", help="UTC date folder YYYY-MM-DD (default: yesterday local→UTC)")
+@click.option("--hour-start", default="10:00", show_default=True, help="UTC hour start (HH:MM)")
+@click.option("--parquet-dir", default="parquet", show_default=True)
+@click.option("--build-dir", default="build", show_default=True)
+@click.option("--out-reports", default="out/reports", show_default=True)
+@click.option("--tmp", default="out/tmp_report", show_default=True)
+@click.option("--cadence-ms", default=50, show_default=True, type=int)
+@click.option("--speed", default="50x", show_default=True)
+@click.option("--depth-top10", default=None, help="Optional path to L2 top-10 depth parquet")
+def analyze(exchange, symbol, date, hour_start, parquet_dir, build_dir,
+            out_reports, tmp, cadence_ms, speed, depth_top10):
+    from olob import analyze as _analyze
+    out = _analyze.run_pipeline(
+        exchange=exchange,
+        symbol=symbol,
+        date=date or _analyze._yesterday_utc_date(),
+        hour_start=hour_start,
+        parquet_dir=Path(parquet_dir),
+        build_dir=Path(build_dir),
+        out_reports_dir=Path(out_reports),
+        tmp_dir=Path(tmp),
+        cadence_ms=cadence_ms,
+        speed=speed,
+        depth_top10=Path(depth_top10) if depth_top10 else None,
+    )
+    click.secho(f"[report] wrote {out}", fg="green")
+
+
+
 
 if __name__ == "__main__":
     cli()
