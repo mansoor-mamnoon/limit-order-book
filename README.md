@@ -416,6 +416,70 @@ python -m olob.metrics \
 
 ---
 
+### 📊 Microstructure Analytics (volatility, impact, flow, imbalance, clustering)
+
+This repository includes a Python module that computes **microstructure metrics** from TAQ-style quotes/trades (and optional depth), and produces reproducible figures + a JSON summary.
+
+---
+
+#### 🔍 What it computes
+- **Realized volatility (Parkinson & Garman–Klass)** on mid-price (best bid/ask).  
+- **Impact curves**: average **future mid move** (bp) vs **trade size** buckets (notional deciles & size percentiles), across horizons (e.g., 0.5s, 1s).  
+- **Order-flow autocorrelation** from signed trades.  
+- **Short-horizon drift vs L1 imbalance** (decile bins).  
+- **Clustering of impact-curve shapes** (k-means) to reveal execution regimes.  
+
+---
+
+#### ⚙️ Key design choices
+- Robust time joins via `merge_asof` + **uniform drift grid** (`shift(-k)` makes future-mid trivial).  
+- Schema flexibility: supports both **wide** and **tidy** depth; falls back to quote sizes when depth doesn’t overlap.  
+- Timestamp normalization (s/ms/µs → ns) and coverage extension to avoid empty joins.  
+- Outputs: **PNGs** and a **JSON** summary for downstream analysis or reporting.  
+
+---
+
+#### ▶️ Usage (example)
+```bash
+python -m olob.microstructure \
+  --quotes taq_quotes.csv \
+  --trades taq_trades.csv \
+  --depth-top10 recon/YYYY-MM-DD/<exchange>/<symbol>/top10_depth.parquet \
+  --plots-out analytics/plots \
+  --out-json analytics/microstructure_summary.json \
+  --bar-sec 60 --rv-window 30 \
+  --impact-horizons-ms 500,1000 \
+  --autocorr-max-lag 50 \
+  --drift-grid-ms 1000 \
+  --debug-out analytics/debug
+```
+
+---
+
+#### 📦 Generated artifacts
+
+**Figures (PNG)**  
+- `analytics/plots/vol.png` — Annualized Parkinson & Garman–Klass on mid.  
+- `analytics/plots/impact.png` — Impact curves: future mid (bp) vs size buckets.  
+- `analytics/plots/oflow_autocorr.png` — Signed trade autocorrelation by lag.  
+- `analytics/plots/drift_vs_imbalance.png` — Future drift (bp) by L1 imbalance decile.  
+- `analytics/plots/impact_clusters.png` — Cluster centroids of impact-curve shapes.  
+
+**Summary (JSON)**  
+- `analytics/microstructure_summary.json`  
+
+---
+
+#### 📈 Diagrams
+
+![Realized Volatility](analytics/plots/vol.png)  
+![Impact Curves](analytics/plots/impact.png)  
+![Order-Flow Autocorr](analytics/plots/oflow_autocorr.png)  
+![Drift vs Imbalance](analytics/plots/drift_vs_imbalance.png)  
+![Impact Clusters](analytics/plots/impact_clusters.png)  
+
+---
+
 ## 🎯 Summary
 
 - **Low-latency hot path**: arenas, branch minimization, cache locality.  
