@@ -525,7 +525,7 @@ The HTML report is fully **self-contained** — just open it in any browser, no 
 
 ## ✅ Performance & Analytics
 
-We validated the engine on both **synthetic** and **real exchange data**.
+I validated the engine on both **synthetic** and **real exchange data**.
 
 ---
 
