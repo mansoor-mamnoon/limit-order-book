@@ -740,73 +740,77 @@ Artifacts per run include:
 
 This proves **end-to-end functionality of the strategy API, cost model, and queue-aware execution loop**.
 
-## 🔄 Parameter Sweeps & Parallel Backtests
+## 🔄 Parameter Sweeps & Parallel Backtests (Day 18)
 
-I implemented a **parameter sweep engine** that takes a grid of strategy configs and runs them **in parallel** across multiple processes. The sweep produces per-run artifacts (`fills.csv`, `summary.json`, `risk_summary.json`), plus aggregated results (`aggregate.csv`, `best.json`, `ranking.png`).  
+I implemented a parallel sweep that runs a grid of backtests, aggregates results, ranks by a risk-adjusted metric, and saves charts + CSVs for reproducibility.
 
----
-
-### Why this matters
-- Enables **systematic exploration** of strategy hyperparameters (e.g. `parent_qty`, `min_clip`, `cooldown_ms`).  
-- Runs **N configs in parallel**, dramatically speeding up experimentation.  
-- Produces **deterministic artifacts** for reproducibility and comparison.  
-- Selects the **best configuration** by a chosen metric (default: Sharpe-like ratio).  
+**Acceptance window (UTC):** 2025-08-26 08:07:03 → 09:07:01  
+**Grid:** `parent_qty ∈ {2,5}`, `min_clip ∈ {0.05,0.1}`, `cooldown_ms ∈ {0,250}`, `side=buy`, `seed=1`  
+**Artifacts:** per-run JSON/CSVs + `aggregate.csv`, `best.json`, `ranking.png`, and the plots below.
 
 ---
 
-### 📊 Acceptance Sweep (VWAP configs)
-
-I tested a **16-config grid** over a fixed 1-hour TAQ window  
-(start: `2025-08-26 08:07:03+00:00`, end: `2025-08-26 09:07:01+00:00`).  
-
-Grid dimensions:
-- `parent_qty ∈ {2.0, 5.0}`  
-- `min_clip ∈ {0.05, 0.1}`  
-- `cooldown_ms ∈ {0, 250}`  
-- `side = buy`  
-- `seed = 1`  
-
----
-
-### ✅ Results
-
+### ✅ Results (summary)
 ```
-[1/16] ok … cooldown_ms=0 … score=9891.53
-[2/16] ok … cooldown_ms=250 … score=6212.68
-…
 [ok] aggregate -> out/sweeps/acceptance/aggregate.csv
-[ok] ranking -> out/sweeps/acceptance/ranking.png
-[ok] best -> out/sweeps/acceptance/best.json
+[ok] ranking   -> out/sweeps/acceptance/ranking.png
+[ok] best      -> out/sweeps/acceptance/best.json
 ```
-
-- **All 16 configs completed successfully.**  
-- `cooldown_ms=0` consistently scored higher (~9891) than `cooldown_ms=250` (~6212).  
-- Changing `parent_qty` and `min_clip` did not materially affect Sharpe-like score in this dataset.  
 
 ---
 
-### 📈 Evidence (Charts)
+### 📈 Evidence (charts)
 
-**1. Sweep ranking plot (top-K configs)**  
+**1) Sweep ranking (top-K)**  
 ![Sweep ranking](out/sweeps/acceptance/ranking.png)
 
-**2. Equity curve (example run)**  
-![Equity curve](out/sweeps/acceptance/vwap-cooldown_ms0-min_clip0.05-parent_qty5-sidebuy-26e4f52d/equity_curve.png)
+**2) Risk vs Return (all configs)**  
+![Risk scatter](out/sweeps/acceptance/plots/risk_scatter.png)
 
-**3. Risk summary plot (drawdown vs Sharpe)**  
-![Risk scatter](out/sweeps/acceptance/risk_scatter.png)
+**3) Equity curve (best run)**  
+![Equity curve](out/sweeps/acceptance/plots/equity_curve.png)
 
-**4. PnL time series (best run)**  
-![PnL timeseries](out/sweeps/acceptance/vwap-cooldown_ms0-min_clip0.05-parent_qty5-sidebuy-26e4f52d/pnl_timeseries.png)
+**4) PnL timeseries (best run)**  
+![PnL timeseries](out/sweeps/acceptance/plots/pnl_timeseries.png)
+
+💡 If I want to embed a specific run’s figures, I can use its exact slugged folder name (from `best.json` or `ls out/sweeps/acceptance/*/`) and point to any PNGs generated inside that folder.
+
+---
+
+### ⚡ Optional: Auto-generate plots at sweep end
+If I want the sweep itself to emit the plots above automatically, I can add this to the end of `run_sweep()` in `python/olob/sweep.py` (right after writing `aggregate.csv` / `best.json`):
+
+```python
+# Auto-plots for README evidence
+try:
+    from . import make_readme_figs as _figs
+    _figs._risk_scatter(agg_csv, out_root / "plots" / "risk_scatter.png")
+    if (out_root / "best.json").exists():
+        best = json.loads((out_root / "best.json").read_text())
+        best_dir = Path(best["run_dir"])
+        (out_root / "plots").mkdir(parents=True, exist_ok=True)
+        _figs._equity_curve(best_dir, out_root / "plots" / "equity_curve.png")
+        _figs._pnl_timeseries(best_dir, out_root / "plots" / "pnl_timeseries.png")
+except Exception as e:
+    print(f"[warn] could not auto-generate README plots: {e}")
+```
 
 ---
 
-### 🏁 Key Takeaways
-- ✅ Parallel sweeps completed deterministically with per-run logs & outputs.  
-- ✅ Sharpe-like ratio was maximized with **cooldown disabled (0ms)**.  
-- ✅ Project now supports **hyperparameter exploration at scale** with reproducible artifacts and visualizations.  
+### 🔍 One-liners to verify README file references
+```bash
+# These are the files my README links to
+ls -l out/sweeps/acceptance/ranking.png
+ls -l out/sweeps/acceptance/plots/risk_scatter.png
+ls -l out/sweeps/acceptance/plots/equity_curve.png
+ls -l out/sweeps/acceptance/plots/pnl_timeseries.png
+```
 
----
+If any of these don’t exist, I can regenerate them with:
+```bash
+python -m olob.make_readme_figs --sweep-dir out/sweeps/acceptance
+```
+
 
 ## 🎯 Summary
 
