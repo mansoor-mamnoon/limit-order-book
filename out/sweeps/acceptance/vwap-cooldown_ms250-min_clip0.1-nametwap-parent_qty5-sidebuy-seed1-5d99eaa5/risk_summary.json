@@ -1,0 +1,14 @@
+{
+  "final_inventory": 5.0,
+  "avg_cost": 113060.96681759998,
+  "last_mid": 112739.72,
+  "pnl_realized": 0.0,
+  "pnl_unrealized": -1606.2340879999101,
+  "pnl_total": -567024.1291428176,
+  "max_drawdown": 486302.5789632427,
+  "turnover": 1.0,
+  "sharpe_like": 6212.681819219532,
+  "fee_bps": 2.0,
+  "rows_equity": 114,
+  "rows_fills": 10
+}

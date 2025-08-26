@@ -1,0 +1,12 @@
+{
+  "filled_qty": 4.999900000000001,
+  "avg_px": 110501.39888037759,
+  "notional": 552495.944262,
+  "fees": 110.49918885240001,
+  "signed_cost": 552606.4434508524,
+  "strategy": "iceberg_btcusdt",
+  "type": "iceberg",
+  "side": "buy",
+  "fills_csv": "out/backtests/day17_hour/cmp/iceberg/iceberg_btcusdt_fills.csv",
+  "seed": 17
+}

@@ -1,0 +1,6 @@
+{
+  "out/backtests/day17_cmp/iceberg/iceberg_btcusdt_1h_fills.csv": "439c799d839feff9d5953ecbd4a2734194384af438cb477c7787db350b38cd08",
+  "out/backtests/day17_cmp/iceberg/iceberg_btcusdt_1h_summary.json": "385a5a0f7960073afe90b50108d4c8372a04a0cb3565b6e3033809a2752e6cf5",
+  "out/backtests/day17_cmp/iceberg/pnl_timeseries.csv": "e7feff31b19086a2f22872efc224ab0810b8f800136bf61346c87e37577ce22a",
+  "out/backtests/day17_cmp/iceberg/risk_summary.json": "4e69635ddbee9a220de2785dce007dac8862a2d5fb4e6e2e3c1e84e92abc1406"
+}

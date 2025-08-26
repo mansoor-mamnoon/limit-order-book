@@ -1,0 +1,32 @@
+{
+  "base_strategy": "/Users/muneermamnoon/GitHub Projects/limit-order-book/docs/strategy/vwap.yaml",
+  "grid": {
+    "cooldown_ms": [
+      0,
+      250
+    ],
+    "min_clip": [
+      0.05,
+      0.1
+    ],
+    "name": [
+      "vwap",
+      "twap"
+    ],
+    "parent_qty": [
+      2.0,
+      5.0
+    ],
+    "side": [
+      "buy"
+    ]
+  },
+  "metric": "sharpe_like",
+  "quotes": "/Users/muneermamnoon/GitHub Projects/limit-order-book/taq_quotes.csv",
+  "rows": 16,
+  "seeds": [
+    1
+  ],
+  "topk": 20,
+  "trades": "/Users/muneermamnoon/GitHub Projects/limit-order-book/taq_trades.csv"
+}

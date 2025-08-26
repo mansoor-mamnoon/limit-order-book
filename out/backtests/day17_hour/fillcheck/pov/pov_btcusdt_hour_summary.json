@@ -1,0 +1,12 @@
+{
+  "filled_qty": 0.9925000000000002,
+  "avg_px": 110444.31470931988,
+  "notional": 109615.982349,
+  "fees": 21.9231964698,
+  "signed_cost": 109637.9055454698,
+  "strategy": "pov_btcusdt_hour",
+  "type": "pov",
+  "side": "buy",
+  "fills_csv": "out/backtests/day17_hour/fillcheck/pov/pov_btcusdt_hour_fills.csv",
+  "seed": 17
+}

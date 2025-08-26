@@ -1,0 +1,20 @@
+{
+  "filled_qty": 4.999999999999998,
+  "avg_px": 113060.97973040002,
+  "notional": 565304.8986519999,
+  "fees": 113.06097973039998,
+  "signed_cost": 565417.9596317303,
+  "strategy": "vwap_btcusdt_1h",
+  "type": "vwap",
+  "side": "buy",
+  "parent_qty": 5.0,
+  "start": "2025-08-25T01:44:49Z",
+  "end": "2025-08-25T01:45:10Z",
+  "bar_sec": 1,
+  "latency_ms": 50,
+  "min_clip": 0.1,
+  "cooldown_ms": 0,
+  "fees_bps": 2.0,
+  "fills_csv": "out/backtests/vwap_run2/vwap_btcusdt_1h_fills.csv",
+  "seed": 123
+}

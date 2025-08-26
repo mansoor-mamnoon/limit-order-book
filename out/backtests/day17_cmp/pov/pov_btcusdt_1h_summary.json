@@ -1,0 +1,20 @@
+{
+  "filled_qty": 0.0,
+  "avg_px": null,
+  "notional": 0.0,
+  "fees": 0.0,
+  "signed_cost": 0.0,
+  "strategy": "pov",
+  "type": "pov",
+  "side": "buy",
+  "parent_qty": 5.0,
+  "start": "2025-08-25T01:44:49+00:00",
+  "end": "2025-08-25T01:45:10+00:00",
+  "bar_sec": 1,
+  "latency_ms": 50,
+  "min_clip": 0.1,
+  "cooldown_ms": 500,
+  "fees_bps": 2.0,
+  "fills_csv": "out/backtests/day17_cmp/pov/pov_btcusdt_1h_fills.csv",
+  "seed": 17
+}

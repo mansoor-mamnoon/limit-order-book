@@ -1,0 +1,6 @@
+{
+  "out/backtests/day17_hour/fillcheck/pov/pov_btcusdt_hour_fills.csv": "e72f7fc2f08049e03896b7105f9e89eb7907c69a15577ff94a8e7dbd96aaced9",
+  "out/backtests/day17_hour/fillcheck/pov/pov_btcusdt_hour_summary.json": "3ea64e7c6ffbd42fd8434da9c84a3f54aac1f99a96e90b26107ed901a6c64ada",
+  "out/backtests/day17_hour/fillcheck/pov/pnl_timeseries.csv": "fb72df3444deae049695e17f0abf278c5b7538a715f7427aaf8b532d25b55ff4",
+  "out/backtests/day17_hour/fillcheck/pov/risk_summary.json": "38f137781f6738d80dbda5567ac0a50ba34c0be184754ea55056ecf59592762b"
+}

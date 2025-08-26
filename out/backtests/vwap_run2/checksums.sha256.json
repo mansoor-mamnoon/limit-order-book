@@ -1,0 +1,6 @@
+{
+  "out/backtests/vwap_run2/vwap_btcusdt_1h_fills.csv": "b9c4ec2ba378e4e6000470ca9703bbfbed958d3196793ef2c8d19f174246f80e",
+  "out/backtests/vwap_run2/vwap_btcusdt_1h_summary.json": "e9864fea390f7e79f0a3c1e4deda3bdfdd105dd62d37672182e6681a654cb542",
+  "out/backtests/vwap_run2/pnl_timeseries.csv": "16f4773c81f546022be0fb4d5667a0a3acbd0b209da64ce7c51d381cdd34b9b4",
+  "out/backtests/vwap_run2/risk_summary.json": "1bf86b18c3a3dd34b5c3d0d821efe28f93c15e48846f3547eeba1888bc285d9f"
+}

@@ -1,0 +1,18 @@
+[fills] /Users/muneermamnoon/GitHub Projects/limit-order-book/out/sweeps/acceptance/vwap-cooldown_ms0-min_clip0.05-namevwap-parent_qty5-sidebuy-seed1-26e4f52d/vwap_fills.csv
+[summary] /Users/muneermamnoon/GitHub Projects/limit-order-book/out/sweeps/acceptance/vwap-cooldown_ms0-min_clip0.05-namevwap-parent_qty5-sidebuy-seed1-26e4f52d/vwap_summary.json
+{
+  "filled_qty": 4.9999,
+  "avg_px": 113061.01999999997,
+  "notional": 565293.7938979999,
+  "fees": 113.05875877959998,
+  "signed_cost": 565406.8526567795,
+  "strategy": "vwap",
+  "type": "vwap",
+  "side": "buy",
+  "fills_csv": "/Users/muneermamnoon/GitHub Projects/limit-order-book/out/sweeps/acceptance/vwap-cooldown_ms0-min_clip0.05-namevwap-parent_qty5-sidebuy-seed1-26e4f52d/vwap_fills.csv",
+  "seed": 1
+}
+[risk] wrote /Users/muneermamnoon/GitHub Projects/limit-order-book/out/sweeps/acceptance/vwap-cooldown_ms0-min_clip0.05-namevwap-parent_qty5-sidebuy-seed1-26e4f52d/pnl_timeseries.csv and /Users/muneermamnoon/GitHub Projects/limit-order-book/out/sweeps/acceptance/vwap-cooldown_ms0-min_clip0.05-namevwap-parent_qty5-sidebuy-seed1-26e4f52d/risk_summary.json
+[checksum] wrote /Users/muneermamnoon/GitHub Projects/limit-order-book/out/sweeps/acceptance/vwap-cooldown_ms0-min_clip0.05-namevwap-parent_qty5-sidebuy-seed1-26e4f52d/checksums.sha256.json
+[fills]   /Users/muneermamnoon/GitHub Projects/limit-order-book/out/sweeps/acceptance/vwap-cooldown_ms0-min_clip0.05-namevwap-parent_qty5-sidebuy-seed1-26e4f52d/vwap_fills.csv
+[summary] /Users/muneermamnoon/GitHub Projects/limit-order-book/out/sweeps/acceptance/vwap-cooldown_ms0-min_clip0.05-namevwap-parent_qty5-sidebuy-seed1-26e4f52d/vwap_summary.json

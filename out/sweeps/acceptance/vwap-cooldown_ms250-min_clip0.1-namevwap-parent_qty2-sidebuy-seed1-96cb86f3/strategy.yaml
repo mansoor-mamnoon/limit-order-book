@@ -1,0 +1,17 @@
+name: vwap
+type: vwap
+side: buy
+qty: 5.0
+window:
+  start_ns: 1756195623000000000
+  end_ns: 1756199221000000000
+bar_sec: 60
+min_clip: 0.1
+cooldown_ms: 250
+force_taker: true
+cost:
+  tick_size: 0.01
+  lot_size: 0.01
+  fixed_latency_ms: 50
+  taker_bps: 2.0
+parent_qty: 2.0

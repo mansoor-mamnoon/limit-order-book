@@ -1,0 +1,6 @@
+{
+  "out/backtests/day17_hour/fillcheck/vwap/vwap_btcusdt_hour_fills.csv": "a31e294138d47aa311eb250a09d9e4f11ca4ef9925066691ab12b55bbf4c63dc",
+  "out/backtests/day17_hour/fillcheck/vwap/vwap_btcusdt_hour_summary.json": "02bd9971b2ac9cb9eb3ad14a800c746bd871b7eb5dadf7f1f52628033de54937",
+  "out/backtests/day17_hour/fillcheck/vwap/pnl_timeseries.csv": "10396cc942fedac569e167e2cab9b7c90339b3701fb62e9e144c6b494d9cbd51",
+  "out/backtests/day17_hour/fillcheck/vwap/risk_summary.json": "2b3043fd458c6fbfb4025a006b93164af9efdaf8018c6915554b450524c4fcb5"
+}

@@ -1,0 +1,12 @@
+{
+  "filled_qty": 5.0,
+  "avg_px": 110499.81602920001,
+  "notional": 552499.080146,
+  "fees": 110.4998160292,
+  "signed_cost": 552609.5799620292,
+  "strategy": "vwap_btcusdt",
+  "type": "vwap",
+  "side": "buy",
+  "fills_csv": "out/backtests/day17_hour/cmp/vwap/vwap_btcusdt_fills.csv",
+  "seed": 17
+}

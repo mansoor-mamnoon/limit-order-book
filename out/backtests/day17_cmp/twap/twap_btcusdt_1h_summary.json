@@ -1,0 +1,20 @@
+{
+  "filled_qty": 4.999999999999998,
+  "avg_px": 113060.99564800004,
+  "notional": 565304.97824,
+  "fees": 113.060995648,
+  "signed_cost": 565418.039235648,
+  "strategy": "twap_btcusdt_1h",
+  "type": "twap",
+  "side": "buy",
+  "parent_qty": 5.0,
+  "start": "2025-08-25 01:44:49+00:00",
+  "end": "2025-08-25 01:45:10+00:00",
+  "bar_sec": 1,
+  "latency_ms": 50,
+  "min_clip": 0.1,
+  "cooldown_ms": 0,
+  "fees_bps": 2.0,
+  "fills_csv": "out/backtests/day17_cmp/twap/twap_btcusdt_1h_fills.csv",
+  "seed": 17
+}

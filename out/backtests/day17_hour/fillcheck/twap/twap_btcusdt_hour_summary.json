@@ -1,0 +1,12 @@
+{
+  "filled_qty": 5.1000000000000005,
+  "avg_px": 110506.59282039215,
+  "notional": 563583.623384,
+  "fees": 112.71672467680001,
+  "signed_cost": 563696.3401086768,
+  "strategy": "twap_btcusdt_hour",
+  "type": "twap",
+  "side": "buy",
+  "fills_csv": "out/backtests/day17_hour/fillcheck/twap/twap_btcusdt_hour_fills.csv",
+  "seed": 17
+}

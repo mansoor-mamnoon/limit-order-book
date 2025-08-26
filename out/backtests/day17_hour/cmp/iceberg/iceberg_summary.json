@@ -1,0 +1,20 @@
+{
+  "filled_qty": 5.0,
+  "avg_px": 110506.76999999999,
+  "notional": 552533.85,
+  "fees": 110.50677,
+  "signed_cost": 552644.35677,
+  "strategy": "iceberg",
+  "type": "iceberg",
+  "side": "buy",
+  "parent_qty": 5.0,
+  "start": "2025-08-26T08:07:03+00:00",
+  "end": "2025-08-26T09:07:01+00:00",
+  "bar_sec": 60,
+  "latency_ms": 50,
+  "min_clip": 0.2,
+  "cooldown_ms": 0,
+  "fees_bps": 2.0,
+  "seed": 17,
+  "fills_csv": "out/backtests/day17_hour/cmp/iceberg/iceberg_fills.csv"
+}

@@ -1,0 +1,12 @@
+{
+  "filled_qty": 5.0,
+  "avg_px": 113060.9668176,
+  "notional": 565304.834088,
+  "fees": 113.0609668176,
+  "signed_cost": 565417.8950548175,
+  "strategy": "twap",
+  "type": "vwap",
+  "side": "buy",
+  "fills_csv": "/Users/muneermamnoon/GitHub Projects/limit-order-book/out/sweeps/acceptance/vwap-cooldown_ms250-min_clip0.1-nametwap-parent_qty2-sidebuy-seed1-1c847926/twap_fills.csv",
+  "seed": 1
+}
