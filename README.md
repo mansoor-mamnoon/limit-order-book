@@ -683,7 +683,7 @@ lob backtest \
 
 ---
 
-### 📑 Evidence  
+### 📑 Results
 **`out/backtests/vwap_run/risk_summary.json`**
 ```json
 {
@@ -719,7 +719,7 @@ We validated the execution engine by running **four distinct scheduling strategi
 
 This ensures apples-to-apples comparison under identical market conditions.
 
-### 📊 Results (Day 17 Acceptance)
+### 📊 Results
 
 | strategy | filled_qty | avg_px      | notional     | fees    | signed_cost | pnl_total     | max_drawdown | turnover | sharpe_like |
 |----------|------------|-------------|--------------|---------|-------------|---------------|--------------|----------|-------------|
