@@ -1,5 +1,5 @@
-name: vwap_btcusdt
-type: vwap
+name: iceberg_btcusdt
+type: iceberg
 side: buy
 qty: 5.0
 
@@ -9,6 +9,8 @@ end:   "2025-08-26T09:07:01Z"
 bar_sec: 60
 min_clip: 0.01
 cooldown_ms: 0
+display: 1.0
+replenish_cooldown_ms: 0
 force_taker: true
 
 cost:

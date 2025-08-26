@@ -1,0 +1,17 @@
+name: pov_btcusdt_hour
+type: pov
+side: buy
+qty: 5.10
+bar_sec: 60
+target_pov: 0.30          # 30% of seen bar volume (aggressive)
+min_clip: 0.02
+cooldown_ms: 0
+force_taker: true
+start: 2025-08-26T08:07:03Z
+end:   2025-08-26T09:07:01Z
+cost:
+  lot_size: 0.01
+  tick_size: 0.01
+  taker_bps: 2.0
+  maker_bps: 0.0
+  fixed_latency_ms: 50

@@ -1,8 +1,9 @@
-name: vwap_btcusdt
-type: vwap
+name: twap_btcusdt
+type: twap
 side: buy
 qty: 5.0
 
+# Match your capture window exactly
 start: "2025-08-26T08:07:03Z"
 end:   "2025-08-26T09:07:01Z"
 

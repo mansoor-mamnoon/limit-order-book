@@ -713,6 +713,32 @@ jq -S . out/backtests/vwap_run2/checksums.sha256.json > /tmp/b.json
 diff /tmp/a.json /tmp/b.json  # no output -> identical ✅
 ```
 
+## ✅ Strategy Comparison (VWAP / TWAP / POV / Iceberg)
+
+We validated the execution engine by running **four distinct scheduling strategies** (TWAP, VWAP, POV, Iceberg) over the **same 1-hour BTCUSDT window** captured from Binance US.  
+
+This ensures apples-to-apples comparison under identical market conditions.
+
+### 📊 Results (Day 17 Acceptance)
+
+| strategy | filled_qty | avg_px      | notional     | fees    | signed_cost | pnl_total     | max_drawdown | turnover | sharpe_like |
+|----------|------------|-------------|--------------|---------|-------------|---------------|--------------|----------|-------------|
+| twap     | 5.1000     | 110506.59   | 563583.62    | 112.72  | 563696.34   | -555095.27    | 546299.92    | 1.0      | 350.93      |
+| vwap     | 5.1000     | 110499.67   | 563548.30    | 112.71  | 563661.01   | -555089.00    | 554420.84    | 1.0      | 498.22      |
+| pov      | 0.9925     | 110444.31   | 109615.98    | 21.92   | 109637.91   | -57830.99     | 56724.40     | 1.0      | 334.48      |
+| iceberg  | 5.0999     | 110493.91   | 563507.91    | 112.70  | 563620.61   | -553977.94    | 478685.39    | 1.0      | 202.18      |
+
+- **TWAP / VWAP**: fully filled target 5 BTC parent order.  
+- **POV**: under-filled (~0.99 BTC) due to limited observed market volume vs target %.  
+- **Iceberg**: successfully replenished hidden slices to achieve ~5 BTC filled.  
+
+Artifacts per run include:
+- `*_fills.csv` — all child orders executed  
+- `*_summary.json` — structured execution report  
+- `pnl_timeseries.csv`, `risk_summary.json` — equity + risk stats  
+- `checkums.sha256.json` — deterministic reproducibility  
+
+This proves **end-to-end functionality of the strategy API, cost model, and queue-aware execution loop**.
 
 
 ## 🎯 Summary

@@ -1,0 +1,18 @@
+name: iceberg_btcusdt_hour
+type: iceberg
+side: buy
+qty: 5.10
+bar_sec: 60
+display: 0.30             # visible slice per bar
+replenish: 1.0            # fully replenish display each bar
+min_clip: 0.02
+cooldown_ms: 0
+force_taker: true
+start: 2025-08-26T08:07:03Z
+end:   2025-08-26T09:07:01Z
+cost:
+  lot_size: 0.01
+  tick_size: 0.01
+  taker_bps: 2.0
+  maker_bps: 0.0
+  fixed_latency_ms: 50

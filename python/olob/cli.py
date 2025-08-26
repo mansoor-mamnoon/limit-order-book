@@ -18,63 +18,45 @@ from olob.crypto.common import normalize_day as _normalize_day
 # Analysis/report pipeline
 from olob import analyze as _analyze
 
-# Backtester (VWAP/TWAP)
+# Backtester (TWAP/VWAP/POV/Iceberg)
 from olob.backtest import run_backtest as _run_backtest
 
 
 @click.group(help="LOB utilities")
 def cli() -> None:
-    """Root command group."""
     pass
 
-
-# ---------------------------
-# Existing benchmark command
-# ---------------------------
 
 def _existing(p: Path) -> Optional[str]:
     return str(p) if p.is_file() and os.access(p, os.X_OK) else None
 
 
 def _find_bench_tool() -> Optional[str]:
-    # 1) PATH
     exe = shutil.which("bench_tool")
     if exe:
         return exe
-
-    # 2) venv bin/Scripts
     venv_bin = Path(sys.prefix) / ("Scripts" if os.name == "nt" else "bin")
     exe = _existing(venv_bin / ("bench_tool.exe" if os.name == "nt" else "bench_tool"))
     if exe:
         return exe
 
-    # 3) scikit-build editable locations + common local builds
     here = Path(__file__).resolve()
     repo = here.parents[3] if (len(here.parents) >= 4 and (here.parents[3] / "cpp").exists()) else here.parents[2]
     candidates: list[Path] = []
-
-    # a) _skbuild/**/bench_tool
     for p in repo.glob("_skbuild/*/*"):
         if p.is_dir():
             candidates.extend(p.rglob("bench_tool"))
-
-    # b) common build dirs
     candidates.append(repo / "build" / "cpp" / "bench_tool")
     candidates.append(repo / "cpp" / "build" / "bench_tool")
-
-    # c) rare: bundled next to package
     candidates.append(here.parent / "bench_tool")
-
     for c in candidates:
         exe = _existing(c)
         if exe:
             return exe
 
-    # 4) user override
     env = os.getenv("LOB_BENCH")
     if env and _existing(Path(env)):
         return env
-
     return None
 
 
@@ -97,7 +79,7 @@ def bench(msgs: float) -> None:
         [exe, "--msgs", n],
         [exe, "--num", n],
         [exe, "-n", n],
-        [exe, n],  # positional
+        [exe, n],
     ]
 
     last_err: Optional[subprocess.CalledProcessError] = None
@@ -120,25 +102,17 @@ def bench(msgs: float) -> None:
 
 
 # ---------------------------
-# Day 8 — crypto commands
+# Crypto commands
 # ---------------------------
 
 @cli.command("crypto-capture", help="Capture depth diffs @100ms + trades (raw JSONL.GZ).")
 @click.option("--exchange", default="binance", show_default=True,
-              type=click.Choice(["binance", "binanceus"], case_sensitive=False),
-              help="Exchange to use")
-@click.option("--symbol", default="BTCUSDT", show_default=True, help="Trading pair symbol")
-@click.option("--minutes", default=60, show_default=True, type=int, help="How long to capture")
-@click.option("--raw-dir", default="raw", show_default=True, help="Root folder for raw output")
-@click.option("--snapshot-every-sec", default=600, show_default=True, type=int,
-              help="REST snapshot cadence (seconds)")
+              type=click.Choice(["binance", "binanceus"], case_sensitive=False))
+@click.option("--symbol", default="BTCUSDT", show_default=True)
+@click.option("--minutes", default=60, show_default=True, type=int)
+@click.option("--raw-dir", default="raw", show_default=True)
+@click.option("--snapshot-every-sec", default=600, show_default=True, type=int)
 def crypto_capture(exchange: str, symbol: str, minutes: int, raw_dir: str, snapshot_every_sec: int) -> None:
-    """
-    Starts a capture session:
-      - WebSocket: diff-depth(100ms) + trades
-      - REST: periodic depth snapshots
-      - Writes raw gzipped JSONL to raw/YYYY-MM-DD/<exchange>/<symbol>/{depth,trades}
-    """
     _binance_capture(
         symbol=symbol.upper(),
         minutes=minutes,
@@ -150,18 +124,12 @@ def crypto_capture(exchange: str, symbol: str, minutes: int, raw_dir: str, snaps
 
 @cli.command("normalize", help="Normalize raw depth diffs + trades to Parquet {ts,side,price,qty,type}.")
 @click.option("--exchange", default="binance", show_default=True,
-              type=click.Choice(["binance", "binanceus"], case_sensitive=False),
-              help="Exchange that produced the raw files")
+              type=click.Choice(["binance", "binanceus"], case_sensitive=False))
 @click.option("--date", default=None, help="UTC date YYYY-MM-DD (defaults to today UTC)")
-@click.option("--symbol", default="BTCUSDT", show_default=True, help="Symbol to normalize")
-@click.option("--raw-dir", default="raw", show_default=True, help="Raw input root")
-@click.option("--out-dir", default="parquet", show_default=True, help="Parquet output root")
+@click.option("--symbol", default="BTCUSDT", show_default=True)
+@click.option("--raw-dir", default="raw", show_default=True)
+@click.option("--out-dir", default="parquet", show_default=True)
 def normalize(exchange: str, date: Optional[str], symbol: str, raw_dir: str, out_dir: str) -> None:
-    """
-    Reads raw gzipped JSONL from raw/<date>/<exchange>/<symbol> and writes a single Parquet
-    at parquet/<date>/<exchange>/<symbol>/events.parquet with the schema:
-      ts:int64(ns UTC), side:str, price:float64, qty:float64, type:str
-    """
     day = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     _normalize_day(
         date_str=day,
@@ -207,27 +175,18 @@ def analyze(exchange, symbol, date, hour_start, parquet_dir, build_dir,
 
 
 # ---------------------------
-# Backtest (VWAP/TWAP)
+# Backtest (TWAP/VWAP/POV/Iceberg)
 # ---------------------------
 
-@cli.command("backtest", help="Run VWAP/TWAP strategy backtest and output fills + cost.")
-@click.option("--strategy", required=True, help="YAML config (e.g., docs/strategy/vwap.yaml)")
+@cli.command("backtest", help="Run strategy backtest and output fills + cost.")
+@click.option("--strategy", required=True, help="YAML config (e.g., docs/strategy/twap.yaml)")
 @click.option("--quotes", required=False, help="TAQ quotes CSV (from replay_tool)")
 @click.option("--file", required=False, help="Alias for --quotes")
-@click.option("--trades", required=False, help="TAQ trades CSV (for VWAP volume weights)")
+@click.option("--trades", required=False, help="TAQ trades CSV (for VWAP/POV weights)")
 @click.option("--out", "out_dir", required=True, help="Output directory (e.g., out/backtests/run1)")
 @click.option("--seed", default=42, show_default=True, type=int, help="Deterministic RNG seed")
 def backtest(strategy: str, quotes: Optional[str], file: Optional[str],
              trades: Optional[str], out_dir: str, seed: int) -> None:
-    """
-    Schedules parent orders into child clips (TWAP/VWAP), applies fixed latency,
-    quantizes by tick/lot, executes against top-of-book, and writes:
-      - *_fills.csv
-      - *_summary.json
-      - pnl_timeseries.csv
-      - risk_summary.json
-      - checksums.sha256.json
-    """
     qpath = quotes or file
     if not qpath:
         click.secho("Provide --quotes or --file (quotes CSV).", fg="red")
@@ -242,7 +201,6 @@ def backtest(strategy: str, quotes: Optional[str], file: Optional[str],
                             out_dir=str(out),
                             seed=int(seed))
 
-    # Print exact paths produced by backtester
     fills_path = summary.get("fills_csv")
     summary_path = Path(fills_path).with_name(
         Path(fills_path).stem.replace("_fills", "_summary") + ".json"
