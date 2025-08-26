@@ -27,6 +27,8 @@ try:
 except Exception:
     _run_sweep = None  # type: ignore
 
+from olob.crashsnapshot import run_replay_with_snapshot as _run_snapshot
+from olob.crashsnapshot import prove_equivalence as _prove_snapshot_equivalence
 
 @click.group(help="LOB utilities")
 def cli() -> None:
@@ -339,6 +341,57 @@ def sweep(grid_path: Path,
     best = out_root / "best.json"
     if best.exists():
         click.secho(f"[ok] best -> {best}", fg="green")
+
+# ---------------------------
+# Crash recovery check
+# ---------------------------
+
+from olob.crashcheck import run_crash_check as _run_crash_check
+
+@cli.command("crash-check", help="Prove two-phase (crash->resume) equals single-pass fills (TWAP recommended).")
+@click.option("--strategy", required=True, help="YAML config (e.g., docs/strategy/twap.yaml)")
+@click.option("--quotes", required=True, help="TAQ quotes CSV")
+@click.option("--trades", required=False, help="TAQ trades CSV")
+@click.option("--out", "out_dir", required=True, help="Output dir for ref/partA/partB")
+@click.option("--bar-sec", default=60, show_default=True, type=int, help="Bar size in seconds (align cut)")
+@click.option("--cut-pct", default=0.6, show_default=True, type=float, help="Cut as fraction of total duration (0..1)")
+@click.option("--seed", default=123, show_default=True, type=int)
+def crash_check_cmd(strategy: str, quotes: str, trades: Optional[str],
+                    out_dir: str, bar_sec: int, cut_pct: float, seed: int) -> None:
+    res = _run_crash_check(strategy_yaml=strategy,
+                           quotes_csv=quotes,
+                           trades_csv=trades,
+                           out_dir=out_dir,
+                           bar_sec=bar_sec,
+                           cut_pct=cut_pct,
+                           seed=seed)
+    if res.ok:
+        click.secho(f"[ok] crash-check passed: {res.message}", fg="green")
+    else:
+        click.secho(f"[FAIL] crash-check failed: {res.message}", fg="red")
+        click.secho(f"  ref:   {res.ref_dir}", fg="yellow")
+        click.secho(f"  partA: {res.partA_dir}", fg="yellow")
+        click.secho(f"  partB: {res.partB_dir}", fg="yellow")
+        raise click.Abort()
+
+@cli.command("snapshot-proof", help="Dev proof: snapshot+mid-file == single-pass (TWAP-friendly).")
+@click.option("--events", "events_csv", required=True, help="Events CSV with ts_ns")
+@click.option("--cut-ns", required=True, type=int, help="Cut timestamp in ns")
+@click.option("--out", "out_dir", required=True, help="Output dir for artifacts")
+@click.option("--strategy", required=False, help="YAML strategy (TWAP recommended)")
+def snapshot_proof_cmd(events_csv: str, cut_ns: int, out_dir: str, strategy: str | None) -> None:
+    artifacts = _run_snapshot(events_csv=events_csv, cut_ns=cut_ns, out_dir=out_dir)
+    click.secho(f"[ok] snapshot -> {artifacts['snap']}", fg="green")
+    if strategy:
+        eq = _prove_snapshot_equivalence(
+            strategy_yaml=strategy,
+            quotes_full=artifacts["quotes_A"],
+            quotes_resume=artifacts["quotes_B"],
+            out_dir=str(Path(out_dir) / "bt"),
+        )
+        click.secho(f"[ok] fills equivalent: {eq['message']}", fg="green")
+    else:
+        click.secho("[note] Pass --strategy docs/strategy/twap.yaml to run the fills equivalence check.", fg="yellow")
 
 
 if __name__ == "__main__":

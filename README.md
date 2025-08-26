@@ -860,6 +860,180 @@ It shows how the midprice and spread move over time:
 - **Engaging for reviewers**: GIF evidence lives in the repo; app can be launched in one command.  
 - **Bridges quant + intuition**: more compelling than raw CSVs or tables alone.  
 
+## 📸 Snapshot + Mid-File Replay Proof (LOB)
+
+This section documents how to reproduce and **prove** that  
+taking a snapshot at a cut timestamp + resuming replay from the mid-file tail  
+produces the **same fills and economics** as a single-pass replay.  
+
+It also explains the artifacts in `out/snapshot_proof/` so contributors know what each file means.
+
+---
+
+### 🔨 Build
+
+```bash
+cmake -S cpp -B build/cpp -DCMAKE_BUILD_TYPE=Release
+cmake --build build/cpp -j
+```
+
+This produces `build/cpp/tools/replay_tool` with snapshot options:
+
+- `--snapshot-at-ns <CUT_NS>` – dump a snapshot once replay time ≥ CUT_NS  
+- `--snapshot-out <FILE>` – write snapshot to this file  
+- `--snapshot-in <FILE>` – resume replay from a snapshot  
+- `--quotes-out <CSV>` – emit L1 TAQ quotes (`ts_ns,bid_px,bid_qty,ask_px,ask_qty`)  
+- `--trades-out <BIN>` – emit trades binary (optional debug)  
+
+*Note*: `bid_px`/`ask_px` are ticks. Multiply by tick size if downstream code expects prices.  
+
+---
+
+### ▶️ Run the Proof
+
+If you have Parquet, convert once to CSV:
+
+```bash
+python - <<'PY'
+import pandas as pd, pathlib
+p = pathlib.Path("parquet/2025-08-25/binanceus/BTCUSDT/events.parquet")
+df = pd.read_parquet(p)
+df.to_csv(p.with_suffix(".csv"), index=False)
+print("Wrote", p.with_suffix(".csv"))
+PY
+```
+
+Then run the CLI:
+
+```bash
+lob snapshot-proof \
+  --events parquet/2025-08-25/binanceus/BTCUSDT/events.csv \
+  --cut-ns 1724544000000000000 \
+  --out out/snapshot_proof \
+  --strategy docs/strategy/twap.yaml
+```
+
+---
+
+### 🔍 What Happens
+
+1. **Pass A**: Replay from start → when `ts_ns >= CUT_NS`, dump `snapshot.bin`.  
+   Continue emitting L1 quotes to `quotes_A.csv`.  
+2. **Tail**: Extract all events where `ts_ns >= CUT_NS` → `events_tail.csv`.  
+3. **Pass B**: Replay the tail starting from `snapshot.bin` → emit `quotes_B.csv`.  
+4. **Backtest (optional)**: If `--strategy` is provided, run backtests on A and B and compare.  
+
+---
+
+### 📂 Artifacts (`out/snapshot_proof/`)
+
+- **`snapshot.bin`** — the saved snapshot at the cut; consumed by `--snapshot-in`.  
+- **`.snap_tmp/`** — internal temp snapshot files (inspectable, can be deleted).  
+- **`events_tail.csv`** — tail slice (`ts_ns >= CUT_NS`).  
+- **`quotes_A.csv`** — L1 TAQ from single-pass replay.  
+- **`quotes_B.csv`** — L1 TAQ from resume replay.  
+- **`trades_A.bin`, `trades_B.bin`** — raw trade binaries (debug / analysis).  
+- **`equivalence.json`** — when backtesting, compares A vs B fills:  
+  ```json
+  {
+    "ok": true,
+    "message": "strict equality on shared columns",
+    "fills_A": "out/snapshot_proof/bt/A/twap_fills.csv",
+    "fills_B": "out/snapshot_proof/bt/B/twap_fills.csv"
+  }
+  ```
+
+---
+
+### 📊 Backtests (`out/snapshot_proof/bt/`)
+
+- **A/** — results on single-pass quotes.  
+  - `twap_fills.csv` — order-level fills used in equality checks.  
+  - `twap_summary.json` — slippage, avg cost, etc.  
+  - `risk_summary.json` — risk metrics (if enabled).  
+  - `pnl_timeseries.csv` — equity/PnL time series.  
+  - `checksums.sha256.json` — integrity hashes.  
+
+- **B/** — results on snapshot+resume quotes (same schema as A).  
+
+✅ **Pass criteria**: A vs B fills and econ are identical (`equivalence.json: ok=true`).  
+If not, CLI exits non-zero with pointers to A/B artifacts.  
+
+---
+
+### ⚙️ Direct `replay_tool` Usage (Optional)
+
+**Pass A:**
+```bash
+build/cpp/tools/replay_tool \
+  --file parquet/2025-08-25/binanceus/BTCUSDT/events.csv \
+  --snapshot-at-ns 1724544000000000000 \
+  --snapshot-out out/snapshot_proof/snapshot.bin \
+  --quotes-out  out/snapshot_proof/quotes_A.csv \
+  --trades-out out/snapshot_proof/trades_A.bin
+```
+
+**Create tail (pandas filter):**  
+`events_tail.csv` with `ts_ns >= CUT_NS`.  
+
+**Pass B:**
+```bash
+build/cpp/tools/replay_tool \
+  --file out/snapshot_proof/events_tail.csv \
+  --snapshot-in out/snapshot_proof/snapshot.bin \
+  --quotes-out  out/snapshot_proof/quotes_B.csv \
+  --trades-out out/snapshot_proof/trades_B.bin
+```
+
+---
+
+### 🖼️ Embedding Diagrams
+
+If your pipeline (e.g., `olob.analyze` or notebooks) generates figures, you can embed them directly in the README:
+
+**Example: TWAP Equity Curve (A vs B)**  
+![TWAP PnL Timeseries](out/snapshot_proof/bt/A/pnl_timeseries.png)
+
+**Example: Depth Snapshot**  
+![Depth Top-10](depth_chart.png)
+
+*Tips*:  
+- Keep images small. For large binaries, use Git LFS.  
+- If you only have CSV (e.g., `pnl_timeseries.csv`), plot it in a notebook and export a PNG to a stable path (e.g., `docs/img/snapshot_proof_pnl.png`) for embedding.  
+
+---
+
+### 📊 Day 20 — Snapshot Proof Diagrams
+
+After running:
+
+```bash
+lob snapshot-proof \
+  --events parquet/2025-08-25/binanceus/BTCUSDT/events.csv \
+  --cut-ns 1724544000000000000 \
+  --out out/snapshot_proof \
+  --strategy docs/strategy/twap.yaml
+
+# generate diagrams (use `equity` as PnL)
+python make_day20_charts.py --root out/snapshot_proof --pnl-val equity
+```
+
+the following three diagrams are produced in `out/snapshot_proof/`:
+
+1. **Top-of-book A vs B**  
+   Compares bid/ask evolution from single-pass (A) vs snapshot+resume (B).  
+   ![Top-of-book A vs B](out/snapshot_proof/quotes_compare.png)
+
+2. **Cumulative fills A vs B**  
+   Tracks cumulative filled quantity over time; both lines should overlap exactly.  
+   ![Cumulative fills A vs B](out/snapshot_proof/fills_compare.png)
+
+3. **PnL timeseries A vs B (equity)**  
+   Uses the `equity` column (cash + inventory value) as the PnL measure.  
+   ![PnL timeseries A vs B](out/snapshot_proof/pnl_timeseries_compare.png)
+
+> ✅ When all three charts overlap between A and B, this demonstrates that “snapshot at cut + mid-file replay” reproduces the single-pass replay.
+
 
 ## 🎯 Summary
 

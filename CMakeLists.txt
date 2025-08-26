@@ -2,11 +2,14 @@ cmake_minimum_required(VERSION 3.21)
 project(lob_root)
 enable_testing()
 
+# Global cache options (control from top-level)
 set(LOB_BUILD_TESTS ON  CACHE BOOL "Build C++ tests (requires Catch2)" FORCE)
 set(LOB_PROFILING  ON  CACHE BOOL "Enable frame pointers for profiling" FORCE)
 set(LOB_LTO        OFF CACHE BOOL "Enable LTO in Release" FORCE)
+set(LOB_USE_MIMALLOC OFF CACHE BOOL "Link mimalloc (tools + libs)" FORCE)
+set(LOB_ENABLE_ASAN ON CACHE BOOL "Enable AddressSanitizer in Debug" FORCE)
 
-# ---- Catch2 for tests ----
+# ---- Catch2 for tests (made available to cpp/ if tests are enabled) ----
 include(FetchContent)
 FetchContent_Declare(
   catch2

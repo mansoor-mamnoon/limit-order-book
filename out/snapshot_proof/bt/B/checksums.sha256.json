@@ -1,0 +1,6 @@
+{
+  "out/snapshot_proof/bt/B/twap_fills.csv": "c07539cea67437c4f7c707a3083097e64bd0372036e01ff331544acc5387eaf4",
+  "out/snapshot_proof/bt/B/twap_summary.json": "6d7447ddc819ec975240edf49f0e23ed205e817e67f210793e33beab9ede6e08",
+  "out/snapshot_proof/bt/B/pnl_timeseries.csv": "af7d53c9adabc9982e6f64ea4451503078fead536491645035e94dcca2973797",
+  "out/snapshot_proof/bt/B/risk_summary.json": "a5e32f8db98842837c0e851ecf97cf9fe65b2f7a7aefb5b6bfe45cbf5cfc9813"
+}

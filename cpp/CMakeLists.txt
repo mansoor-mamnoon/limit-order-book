@@ -2,8 +2,9 @@ cmake_minimum_required(VERSION 3.21)
 project(lob LANGUAGES CXX)
 
 # ---------------- Options ----------------
+# Defaults here are overridden by top-level cache if provided
 option(LOB_ENABLE_ASAN   "Enable AddressSanitizer in Debug" ON)
-option(LOB_BUILD_TESTS   "Build C++ tests (requires Catch2)" OFF)  # default OFF standalone
+option(LOB_BUILD_TESTS   "Build C++ tests (requires Catch2)" OFF)
 option(LOB_PROFILING     "Build with frame pointers for perf/Instruments" OFF)
 option(LOB_LTO           "Enable Link Time Optimization in Release" OFF)
 option(LOB_USE_MIMALLOC  "Link mimalloc for operator new/delete (tools + libs)" OFF)
@@ -52,20 +53,6 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   target_compile_options(lob_util PRIVATE -O2)
 endif()
 
-# ---------------- Tools ----------------
-add_executable(replay_tool
-  src/replay.cpp
-)
-target_link_libraries(replay_tool PRIVATE lob_core lob_util)
-target_include_directories(replay_tool PRIVATE include)
-
-add_executable(bench_tool tools/bench.cpp)
-target_link_libraries(bench_tool PRIVATE lob_core lob_util)
-target_include_directories(bench_tool PRIVATE include)
-if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-  target_compile_options(bench_tool PRIVATE -O3 -march=native)
-endif()
-
 # Optional mimalloc (can help non-hot allocations)
 if(LOB_USE_MIMALLOC)
   include(FetchContent)
@@ -75,16 +62,16 @@ if(LOB_USE_MIMALLOC)
     GIT_TAG v2.1.7
   )
   FetchContent_MakeAvailable(mimalloc)
-
-  target_link_libraries(bench_tool  PRIVATE mimalloc-static)
-  target_link_libraries(replay_tool PRIVATE mimalloc-static)
-  target_link_libraries(lob_core    PRIVATE mimalloc-static)
-  target_link_libraries(lob_util    PRIVATE mimalloc-static)
-
+  target_link_libraries(lob_core PRIVATE mimalloc-static)
+  target_link_libraries(lob_util PRIVATE mimalloc-static)
   if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     target_compile_definitions(lob_core PRIVATE LOB_MIMALLOC=1)
   endif()
 endif()
+
+# ---------------- Tools ----------------
+# (bench_tool & replay_tool live under cpp/tools)
+add_subdirectory(tools)
 
 # ---------------- Tests (optional) ----------------
 if(LOB_BUILD_TESTS)
@@ -149,10 +136,6 @@ set_target_properties(lob_cpp PROPERTIES OUTPUT_NAME "_lob")
 # ---------------- Install ----------------
 if(WIN32)
   install(TARGETS lob_cpp RUNTIME DESTINATION olob)
-  install(TARGETS bench_tool RUNTIME DESTINATION Scripts)
-  install(TARGETS replay_tool RUNTIME DESTINATION Scripts)
 else()
   install(TARGETS lob_cpp LIBRARY DESTINATION olob)
-  install(TARGETS bench_tool RUNTIME DESTINATION bin)
-  install(TARGETS replay_tool RUNTIME DESTINATION bin)
 endif()

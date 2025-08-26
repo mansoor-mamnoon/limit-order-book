@@ -1,0 +1,6 @@
+{
+  "fills_A": "out/snapshot_proof/bt/A/twap_fills.csv",
+  "fills_B": "out/snapshot_proof/bt/B/twap_fills.csv",
+  "ok": true,
+  "message": "strict equality on shared columns"
+}

@@ -1,0 +1,12 @@
+{
+  "filled_qty": 4.9999,
+  "avg_px": 113061.01999999997,
+  "notional": 565293.7938979999,
+  "fees": 113.05875877959998,
+  "signed_cost": 565406.8526567795,
+  "strategy": "twap",
+  "type": "twap",
+  "side": "buy",
+  "fills_csv": "out/crashcheck/day20/ref_full/twap_fills.csv",
+  "seed": 123
+}

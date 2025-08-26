@@ -1,0 +1,14 @@
+type: twap
+side: buy
+parent_qty: 2.5
+bar_sec: 60
+min_clip: 0.1
+cooldown_ms: 0
+force_taker: false
+latency_ms: 0
+fee_bps: 2.0
+tick_size: 0.01
+lot_size: 0.0001
+window:
+  start_ns: 1756195623000000000
+  end_ns: 1756199221000000000

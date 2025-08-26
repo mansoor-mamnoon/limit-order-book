@@ -1,0 +1,6 @@
+{
+  "out/crashcheck/day20/partB_after_cut/twap_fills.csv": "56f7e54f5ce477ae13bb7d4da11e8ec2401edd66c4a1052ef22fb886d6661b70",
+  "out/crashcheck/day20/partB_after_cut/twap_summary.json": "5a9e552e7c7b9164f5c5cc394455cca67bf3e9f81c402e380fd0dc8161cdbbe6",
+  "out/crashcheck/day20/partB_after_cut/pnl_timeseries.csv": "4ca32eb210e1b79a2bc91338f6d6192ef1c7e9fa25edb3ad90db291443cabc4f",
+  "out/crashcheck/day20/partB_after_cut/risk_summary.json": "4b837e2638d098ec9e23dc8844f5a74baa2fdb6cc32407c4098bcbc4736a9213"
+}

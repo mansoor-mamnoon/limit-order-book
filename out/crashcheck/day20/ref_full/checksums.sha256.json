@@ -1,0 +1,6 @@
+{
+  "out/crashcheck/day20/ref_full/twap_fills.csv": "b5a7b75c14d528518a3f755ffc04cfd683e40b3ca934dac894ee09e4ecd71433",
+  "out/crashcheck/day20/ref_full/twap_summary.json": "0284e0528cca222c56865ddc8f20fb349e19f8550b816ccee1b31d84f8fd55da",
+  "out/crashcheck/day20/ref_full/pnl_timeseries.csv": "23f6a5ee38a18febbe28af14a451b1e6c19d72799efae104550222e46e7332b9",
+  "out/crashcheck/day20/ref_full/risk_summary.json": "2c09fec99644e97974e7bf77e60a70b7278d4095add6e33650207e57886037d3"
+}

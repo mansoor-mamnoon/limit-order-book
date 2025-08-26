@@ -1,22 +1,15 @@
 # docs/strategy/twap.yaml
-name: twap
-side: buy
-
-# Parent order & slicing
-parent_qty: 5.0
-min_clip: 0.1
-cooldown_ms: 0
-
-# Execution controls
-force_taker: false      # set true to cross the spread immediately
+type: twap               # <-- REQUIRED (backtester expects "type")
+side: buy                # buy | sell
+parent_qty: 5.0          # total target size
+bar_sec: 60              # bar size used for scheduling
+min_clip: 0.1            # minimum child size
+cooldown_ms: 0           # delay between clips (ms)
+force_taker: false       # false=passive, true=market
 latency_ms: 0           # decision->arrival latency
-
-# Market model knobs (used by backtester/cost model)
-tick_size: 0.01
-fee_bps: 2.0
-
-# Bars & window (can be overridden by sweep grid)
-bar_sec: 60
+fee_bps: 2.0             # fees in basis points
+tick_size: 0.01          # optional, for rounding
+lot_size: 0.0001         # optional, for rounding
 window:
   start_ns: 1756195623000000000   # 2025-08-26 08:07:03+00:00
   end_ns:   1756199221000000000   # 2025-08-26 09:07:01+00:00
