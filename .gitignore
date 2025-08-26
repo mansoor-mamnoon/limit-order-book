@@ -13,4 +13,3 @@ parquet/
 *.jsonl.gz
 
 .venv
-out/
