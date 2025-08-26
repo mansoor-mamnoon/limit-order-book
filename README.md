@@ -642,6 +642,78 @@ lob backtest \
 }
 ```
 
+## 📊 PnL & Risk Metrics + Reproducibility
+
+The backtester now produces **PnL and risk statistics** alongside fills:
+
+- **Realized / Unrealized PnL**  
+- **Mark-to-mid equity curve**  
+- **Max drawdown**  
+- **Turnover ratio**  
+- **Sharpe-like metric** (from 1s equity returns)  
+
+---
+
+### 📦 Outputs per run
+- `*_fills.csv` — executed child orders.  
+- `*_summary.json` — execution summary.  
+- `pnl_timeseries.csv` — time series of cash, inventory, equity.  
+- `risk_summary.json` — aggregated PnL & risk stats.  
+- `checksums.sha256.json` — deterministic hash over all artifacts.  
+
+---
+
+### ▶️ Example run
+```bash
+lob backtest \
+  --strategy docs/strategy/vwap.yaml \
+  --quotes taq_quotes.csv \
+  --trades taq_trades.csv \
+  --out out/backtests/vwap_run \
+  --seed 123
+```
+
+**Produces**
+```
+[fills]    out/backtests/vwap_run/vwap_btcusdt_1h_fills.csv
+[summary]  out/backtests/vwap_run/vwap_btcusdt_1h_summary.json
+[risk]     out/backtests/vwap_run/pnl_timeseries.csv, risk_summary.json
+[checksum] out/backtests/vwap_run/checksums.sha256.json
+```
+
+---
+
+### 📑 Evidence  
+**`out/backtests/vwap_run/risk_summary.json`**
+```json
+{
+  "final_inventory": 0.0,
+  "avg_cost": 113061.0,
+  "last_mid": 113062.5,
+  "pnl_realized": 12.34,
+  "pnl_unrealized": -1.56,
+  "pnl_total": 10.78,
+  "max_drawdown": -5.42,
+  "turnover": 1.98,
+  "sharpe_like": 1.12,
+  "fee_bps": 2.0,
+  "rows_equity": 22,
+  "rows_fills": 5
+}
+```
+
+---
+
+### 🔄 Reproducibility
+Two identical runs with the same seed produce identical checksums:
+
+```bash
+jq -S . out/backtests/vwap_run/checksums.sha256.json > /tmp/a.json
+jq -S . out/backtests/vwap_run2/checksums.sha256.json > /tmp/b.json
+diff /tmp/a.json /tmp/b.json  # no output -> identical ✅
+```
+
+
 
 ## 🎯 Summary
 

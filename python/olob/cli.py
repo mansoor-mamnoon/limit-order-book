@@ -11,7 +11,7 @@ from typing import Optional
 
 import click
 
-# Day 8: crypto connectors (make sure these modules exist under python/olob/crypto/)
+# Day 8: crypto connectors
 from olob.crypto.binance import run_capture as _binance_capture
 from olob.crypto.common import normalize_day as _normalize_day
 
@@ -216,13 +216,17 @@ def analyze(exchange, symbol, date, hour_start, parquet_dir, build_dir,
 @click.option("--file", required=False, help="Alias for --quotes")
 @click.option("--trades", required=False, help="TAQ trades CSV (for VWAP volume weights)")
 @click.option("--out", "out_dir", required=True, help="Output directory (e.g., out/backtests/run1)")
+@click.option("--seed", default=42, show_default=True, type=int, help="Deterministic RNG seed")
 def backtest(strategy: str, quotes: Optional[str], file: Optional[str],
-             trades: Optional[str], out_dir: str) -> None:
+             trades: Optional[str], out_dir: str, seed: int) -> None:
     """
     Schedules parent orders into child clips (TWAP/VWAP), applies fixed latency,
     quantizes by tick/lot, executes against top-of-book, and writes:
       - *_fills.csv
       - *_summary.json
+      - pnl_timeseries.csv
+      - risk_summary.json
+      - checksums.sha256.json
     """
     qpath = quotes or file
     if not qpath:
@@ -235,10 +239,17 @@ def backtest(strategy: str, quotes: Optional[str], file: Optional[str],
     summary = _run_backtest(strategy_yaml=str(strategy),
                             quotes_csv=str(qpath),
                             trades_csv=str(trades) if trades else None,
-                            out_dir=str(out))
+                            out_dir=str(out),
+                            seed=int(seed))
 
-    click.secho(f"[fills]   {summary.get('fills_csv')}", fg="green")
-    click.secho(f"[summary] {out / (Path(strategy).stem + '_summary.json')}", fg="green")
+    # Print exact paths produced by backtester
+    fills_path = summary.get("fills_csv")
+    summary_path = Path(fills_path).with_name(
+        Path(fills_path).stem.replace("_fills", "_summary") + ".json"
+    ) if fills_path else (out / (Path(strategy).stem + "_summary.json"))
+
+    click.secho(f"[fills]   {fills_path}", fg="green")
+    click.secho(f"[summary] {summary_path}", fg="green")
 
 
 if __name__ == "__main__":

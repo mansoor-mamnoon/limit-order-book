@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <chrono>
 #include <optional>
+#include <random>
 
 // Linux-only pinning headers (no-op elsewhere)
 #if defined(__linux__)
@@ -30,6 +31,11 @@ struct Args {
   long long band_lo = 0, band_hi = 0, band_tick = 1;
   long long band_steps = 0;
   uint64_t latency_sample = 1;     // --latency-sample K (0 = disable per-iter timing)
+
+  // NEW: deterministic RNG controls
+  uint64_t seed = 42;              // --seed N
+  bool rand_prices = false;        // --rand-prices (randomize prices within band or default range)
+  bool rand_sides  = false;        // --rand-sides  (randomize buy/sell instead of alternating)
 } A;
 
 static bool arg_eq(const char* a, const char* b){ return std::strcmp(a,b)==0; }
@@ -60,9 +66,23 @@ static void parse(int argc, char** argv){
     else if (arg_eq(argv[i],"--latency-sample") && i+1<argc) {
       A.latency_sample = to_u64(argv[++i]); // 0 = throughput mode
     }
+    // NEW flags
+    else if (arg_eq(argv[i],"--seed") && i+1<argc) {
+      A.seed = to_u64(argv[++i]);
+    }
+    else if (arg_eq(argv[i],"--rand-prices")) {
+      A.rand_prices = true;
+    }
+    else if (arg_eq(argv[i],"--rand-sides")) {
+      A.rand_sides = true;
+    }
     else {
       std::fprintf(stderr,"Unknown arg: %s\n", argv[i]);
-      std::fprintf(stderr,"Usage: %s --msgs N --warmup N [--out-csv path] [--hist path] [--pin-core N] [--band lo:hi:tick] [--latency-sample K]\n", argv[0]);
+      std::fprintf(stderr,
+        "Usage: %s --msgs N --warmup N "
+        "[--out-csv path] [--hist path] [--pin-core N] "
+        "[--band lo:hi:tick] [--latency-sample K] "
+        "[--seed N] [--rand-prices] [--rand-sides]\n", argv[0]);
       std::exit(2);
     }
   }
@@ -98,13 +118,40 @@ struct Histo {
   }
 };
 
+// RNG (deterministic when seed fixed)
+static thread_local std::mt19937_64 RNG;
+
 static inline Tick gen_price(uint64_t i) {
   if (A.use_band) {
-    const long long step_idx = (long long)(i % (uint64_t)A.band_steps);
-    const long long px = A.band_lo + step_idx * A.band_tick;
-    return (Tick)px;
+    if (A.rand_prices) {
+      // uniform over band steps
+      std::uniform_int_distribution<long long> dist(0, A.band_steps - 1);
+      const long long step_idx = dist(RNG);
+      const long long px = A.band_lo + step_idx * A.band_tick;
+      return (Tick)px;
+    } else {
+      const long long step_idx = (long long)(i % (uint64_t)A.band_steps);
+      const long long px = A.band_lo + step_idx * A.band_tick;
+      return (Tick)px;
+    }
   } else {
-    return (Tick)(1000 + int(i % 25));
+    if (A.rand_prices) {
+      // default non-band range [1000, 1000+25)
+      std::uniform_int_distribution<int> dist(0, 24);
+      return (Tick)(1000 + dist(RNG));
+    } else {
+      return (Tick)(1000 + int(i % 25));
+    }
+  }
+}
+
+static inline Side gen_side(uint64_t i) {
+  if (A.rand_sides) {
+    std::uniform_int_distribution<int> dist(0, 1);
+    return dist(RNG) ? Side::Bid : Side::Ask;
+  } else {
+    // original alternating pattern (unchanged default)
+    return (i & 1) ? Side::Bid : Side::Ask;
   }
 }
 
@@ -115,9 +162,12 @@ static int run_bench(Bids& bids, Asks& asks){
   std::vector<double> us; us.reserve(A.msgs / (A.latency_sample ? A.latency_sample : 1));
   Histo H{};
 
+  // Initialize RNG
+  RNG.seed(A.seed);
+
   // Warmup
   for(uint64_t i=0;i<A.warmup;i++){
-    NewOrder o{(uint64_t)i, 0, i, 1, (i&1)?Side::Bid:Side::Ask, gen_price(i), 1, 0};
+    NewOrder o{(uint64_t)i, 0, i, 1, gen_side(i), gen_price(i), 1, 0};
     (void)book.submit_limit(o);
   }
 
@@ -125,7 +175,7 @@ static int run_bench(Bids& bids, Asks& asks){
   auto t0 = clk::now();
   for(uint64_t i=0;i<A.msgs;i++){
     NewOrder o{(uint64_t)(i + A.warmup), 0, i+1'000'000, 2,
-               (i&1)?Side::Ask:Side::Bid, gen_price(i), 1, 0};
+               gen_side(i), gen_price(i), 1, 0};
 
     if (A.latency_sample == 0) {
       (void)book.submit_limit(o);
@@ -174,14 +224,17 @@ static int run_bench(Bids& bids, Asks& asks){
     FILE* f = std::fopen(A.out_csv,"w");
     if (f){
       std::fprintf(f,
-        "msgs,wall_s,rate_msgs_s,p50_us,p90_us,p99_us,p99_9_us,p99_99_us,band,band_lo,band_hi,band_tick,pin_core,sample_every\n");
+        "msgs,wall_s,rate_msgs_s,p50_us,p90_us,p99_us,p99_9_us,p99_99_us,band,band_lo,band_hi,band_tick,pin_core,sample_every,seed,rand_prices,rand_sides\n");
       std::fprintf(f,
-        "%llu,%.6f,%.1f,%.6f,%.6f,%.6f,%.6f,%.6f,%s,%lld,%lld,%lld,%d,%llu\n",
+        "%llu,%.6f,%.1f,%.6f,%.6f,%.6f,%.6f,%.6f,%s,%lld,%lld,%lld,%d,%llu,%llu,%s,%s\n",
         (unsigned long long)A.msgs, wall_s, mps, p50, p90, p99, p999, p9999,
         (A.use_band ? "yes" : "no"),
         (long long)A.band_lo, (long long)A.band_hi, (long long)A.band_tick,
         (A.pin_core ? *A.pin_core : -1),
-        (unsigned long long)A.latency_sample
+        (unsigned long long)A.latency_sample,
+        (unsigned long long)A.seed,
+        (A.rand_prices ? "yes" : "no"),
+        (A.rand_sides  ? "yes" : "no")
       );
       std::fclose(f);
     }

@@ -1,12 +1,15 @@
 # python/olob/backtest.py
 from __future__ import annotations
-import argparse, json, yaml, os
+import argparse, json, yaml, os, random
 from pathlib import Path
 import pandas as pd
 import numpy as np
 from typing import Optional, Dict, Any, Tuple
 
 from .strategies import StrategyConfig, TWAPStrategy, VWAPStrategy, CostModel
+from .risk import RiskInputs, compute_pnl_and_risk   # Day 16: risk metrics
+from .checksum import write_checksums                # Day 16: reproducibility checksum
+
 
 def _read_quotes(path: str) -> pd.DataFrame:
     """
@@ -132,7 +135,7 @@ def _side_mult(side: str) -> int:
     return +1 if side.lower() == "buy" else -1
 
 def _apply_latency(quotes: pd.DataFrame, ts_ns: int, latency_ms: int) -> Optional[int]:
-    if latency_ms <= 0: 
+    if latency_ms <= 0:
         return ts_ns
     tgt = ts_ns + latency_ms * 1_000_000
     # next quote >= tgt
@@ -143,7 +146,7 @@ def _apply_latency(quotes: pd.DataFrame, ts_ns: int, latency_ms: int) -> Optiona
 
 def _fill_at_quote(qrow: pd.Series, side: str, qty: float, cost: CostModel, force_taker=True) -> Tuple[float,float,bool]:
     """Return (filled_qty, exec_px, taker?) using L1 size if available, otherwise assume full market fill."""
-    if qty <= 0: 
+    if qty <= 0:
         return 0.0, float("nan"), True
     if side.lower() == "buy":
         px = float(qrow["ask_px"])
@@ -192,7 +195,12 @@ def load_strategy_yaml(path: str) -> StrategyConfig:
         cost=cfg.get("cost", {}),
     )
 
-def run_backtest(strategy_yaml: str, quotes_csv: str, trades_csv: Optional[str], out_dir: str) -> Dict[str,Any]:
+def run_backtest(strategy_yaml: str, quotes_csv: str, trades_csv: Optional[str], out_dir: str, seed: int = 42) -> Dict[str,Any]:
+    # Deterministic seeds for all common RNGs
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    random.seed(seed)
+    np.random.seed(seed)  # legacy API used by many libs; fine here
+
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     cfg = load_strategy_yaml(strategy_yaml)
     quotes = _read_quotes(quotes_csv)
@@ -213,9 +221,14 @@ def run_backtest(strategy_yaml: str, quotes_csv: str, trades_csv: Optional[str],
     else:
         raise ValueError(f"Unknown strategy type: {cfg.type}")
 
+    # Best effort: attach RNG to strategy if it supports it (non-breaking)
+    try:
+        setattr(strat, "rng_seed", seed)
+    except Exception:
+        pass
+
     fills = []
     cost = strat.cost
-    bar_edge_ns = start_ns + cfg.bar_sec * 1_000_000_000
     last_bar_idx = -1
 
     for i, row in q.iterrows():
@@ -228,7 +241,7 @@ def run_backtest(strategy_yaml: str, quotes_csv: str, trades_csv: Optional[str],
 
         if strat.remaining() <= 0:
             break
-        # Decide child order
+        # Decide child order (deterministic given seed → strategy internals should be pure)
         desired = strat.on_tick(now_ns)
         desired = cost.quant_qty(desired)
         if desired <= 0:
@@ -251,6 +264,7 @@ def run_backtest(strategy_yaml: str, quotes_csv: str, trades_csv: Optional[str],
     fills_df.to_csv(fills_path, index=False)
 
     summary = _summarize_fills(fills_df, cfg.side, cost)
+    summary_json_path = Path(out_dir) / f"{cfg.name}_summary.json"
     summary.update({
         "strategy": cfg.name,
         "type": cfg.type,
@@ -264,12 +278,38 @@ def run_backtest(strategy_yaml: str, quotes_csv: str, trades_csv: Optional[str],
         "cooldown_ms": cfg.cooldown_ms,
         "fees_bps": cost.taker_bps if True else cost.maker_bps,
         "fills_csv": str(fills_path),
+        "seed": int(seed),  # record seed used
     })
-    (Path(out_dir) / f"{cfg.name}_summary.json").write_text(json.dumps(summary, indent=2))
+    summary_json_path.write_text(json.dumps(summary, indent=2))
     print(f"[fills] {fills_path}")
-    print(f"[summary] {Path(out_dir) / f'{cfg.name}_summary.json'}")
+    print(f"[summary] {summary_json_path}")
     print(json.dumps(summary, indent=2))
+
+    # ----- Day 16: Risk metrics + checksums -----
+    risk_table = Path(out_dir) / "pnl_timeseries.csv"
+    risk_json  = Path(out_dir) / "risk_summary.json"
+
+    # Compute PnL & risk (mark-to-mid, realized/unrealized, maxDD, turnover, Sharpe-like)
+    _ = compute_pnl_and_risk(RiskInputs(
+        quotes_csv=Path(quotes_csv),
+        fills_csv=fills_path,
+        out_table_csv=risk_table,
+        out_summary_json=risk_json,
+        parent_side=cfg.side,                # fills don’t include side -> use parent side
+        fee_bps=float(cost.taker_bps or 0),  # safety in case fees weren’t applied elsewhere
+    ))
+    print(f"[risk] wrote {risk_table} and {risk_json}")
+
+    # Deterministic checksum over key artifacts
+    checksum_path = Path(out_dir) / "checksums.sha256.json"
+    checksums = write_checksums(
+        [fills_path, summary_json_path, risk_table, risk_json],
+        checksum_path
+    )
+    print(f"[checksum] wrote {checksum_path}")
+
     return summary
+
 
 def main():
     ap = argparse.ArgumentParser(prog="lob backtest", description="Strategy backtester (VWAP/TWAP).")
@@ -278,13 +318,15 @@ def main():
     ap.add_argument("--file",     required=False, help="Alias for --quotes")
     ap.add_argument("--trades",   required=False, help="TAQ trades CSV (for VWAP volume weights)")
     ap.add_argument("--out",      required=True,  help="Output directory (e.g., out/backtests/run1)")
+    ap.add_argument("--seed",     required=False, type=int, default=42, help="Deterministic RNG seed")
     args = ap.parse_args()
 
     quotes = args.quotes or args.file
     if not quotes:
         raise SystemExit("Provide --quotes or --file (quotes CSV)")
 
-    run_backtest(args.strategy, quotes, args.trades, args.out)
+    run_backtest(args.strategy, quotes, args.trades, args.out, seed=int(args.seed))
+
 
 if __name__ == "__main__":
     main()
