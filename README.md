@@ -740,7 +740,7 @@ Artifacts per run include:
 
 This proves **end-to-end functionality of the strategy API, cost model, and queue-aware execution loop**.
 
-## 🔄 Parameter Sweeps & Parallel Backtests (Day 18)
+## 🔄 Parameter Sweeps & Parallel Backtests
 
 I implemented a parallel sweep that runs a grid of backtests, aggregates results, ranks by a risk-adjusted metric, and saves charts + CSVs for reproducibility.
 
@@ -812,7 +812,7 @@ python -m olob.make_readme_figs --sweep-dir out/sweeps/acceptance
 ```
 
 
-## 🎥 Day 19 — Minimal Live Visualization
+## 🎥 Minimal Live Visualization
 
 A major upgrade to this project is the **live visualization layer**. Instead of inspecting only static CSVs, I can now **see the market and strategy evolve in real time**. This bridges raw data with intuition — a key requirement for understanding trading algorithms.
 
@@ -1003,7 +1003,7 @@ If your pipeline (e.g., `olob.analyze` or notebooks) generates figures, you can 
 
 ---
 
-### 📊 Day 20 — Snapshot Proof Diagrams
+### 📊 Snapshot Proof Diagrams
 
 After running:
 
