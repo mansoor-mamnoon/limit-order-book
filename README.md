@@ -587,6 +587,61 @@ lob analyze --exchange binanceus --symbol BTCUSDT \
 - **Synthetic throughput**: >20M msgs/sec (**≥3M Gate passed**).  
 - **Real-data replay**: Clean report with volatility, impact curves, autocorr, drift, and clustering.  
 
+## 📈 Strategy Backtesting (VWAP/TWAP)
+
+The repository includes a lightweight **strategy API** and backtester for parent-order execution.
+
+---
+
+### 🔧 What it provides
+- **Strategy interface** with callbacks:  
+  - `on_tick` — per-quote updates.  
+  - `on_bar` — bar-close scheduling.  
+  - `on_fill` — feedback on executed clips.  
+
+- **Schedulers**:  
+  - **TWAP** — evenly slices parent order across bars.  
+  - **VWAP** — weights slices by traded volume per bar (falls back to TWAP if trades missing).  
+
+- **Execution controls**:  
+  - `min_clip` — smallest child order size.  
+  - `cooldown_ms` — minimum delay between clips.  
+  - `force_taker` — flag to choose market vs passive execution.  
+
+- **Cost model**:  
+  - Tick/lot rounding.  
+  - Fixed latency from decision to arrival.  
+  - Fees/rebates (bps).  
+
+---
+
+### 📤 Outputs
+The CLI produces:
+- `*_fills.csv` — detailed child fills (ts, px, qty, bar).  
+- `*_summary.json` — aggregate stats (filled_qty, avg_px, notional, fees, signed_cost, params).  
+
+---
+
+### ▶️ Usage
+```bash
+lob backtest \
+  --strategy docs/strategy/vwap.yaml \
+  --quotes taq_quotes.csv \
+  --trades taq_trades.csv \
+  --out out/backtests/vwap_run
+```
+
+**Example summary**
+```json
+{
+  "filled_qty": 1.67,
+  "avg_px": 113060.98,
+  "notional": 188427.42,
+  "fees": 37.69,
+  "signed_cost": 188465.11
+}
+```
+
 
 ## 🎯 Summary
 

@@ -1,0 +1,23 @@
+name: vwap_btcusdt_1h
+type: vwap            # or "twap"
+side: buy             # "buy" or "sell"
+qty: 5.0              # total units (e.g., BTC)
+
+start: "2025-08-25T01:44:49Z"
+end:   "2025-08-25T01:45:10Z"
+bar_sec: 1
+min_clip: 0.10        # match L1 size
+cooldown_ms: 0        # place on every quote if needed
+latency_ms: 20        # smaller fixed latency
+
+force_taker: true     # send marketable child orders
+
+cost:
+  tick: 0.01
+  lot: 0.0001
+  taker_bps: 2.0      # +2 bps fee
+  maker_bps: -0.5     # -0.5 bps rebate (unused here)
+  latency_ms: 50      # fixed decision->arrival latency
+
+
+

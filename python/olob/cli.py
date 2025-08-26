@@ -15,6 +15,12 @@ import click
 from olob.crypto.binance import run_capture as _binance_capture
 from olob.crypto.common import normalize_day as _normalize_day
 
+# Analysis/report pipeline
+from olob import analyze as _analyze
+
+# Backtester (VWAP/TWAP)
+from olob.backtest import run_backtest as _run_backtest
+
 
 @click.group(help="LOB utilities")
 def cli() -> None:
@@ -165,14 +171,15 @@ def normalize(exchange: str, date: Optional[str], symbol: str, raw_dir: str, out
         out_root=out_dir,
     )
 
-# --- add near the top with other imports ---
-from . import analyze as _analyze
 
-# --- add near the bottom, before __main__ ---
+# ---------------------------
+# Analyze (HTML report)
+# ---------------------------
+
 @cli.command("analyze", help="Generate a self-contained HTML report with plots + stats.")
 @click.option("--exchange", default="binanceus", show_default=True)
 @click.option("--symbol", default="BTCUSDT", show_default=True)
-@click.option("--date", help="UTC date folder YYYY-MM-DD (default: yesterday local→UTC)")
+@click.option("--date", help="UTC date folder YYYY-MM-DD (default: yesterday UTC)")
 @click.option("--hour-start", default="10:00", show_default=True, help="UTC hour start (HH:MM)")
 @click.option("--parquet-dir", default="parquet", show_default=True)
 @click.option("--build-dir", default="build", show_default=True)
@@ -183,7 +190,6 @@ from . import analyze as _analyze
 @click.option("--depth-top10", default=None, help="Optional path to L2 top-10 depth parquet")
 def analyze(exchange, symbol, date, hour_start, parquet_dir, build_dir,
             out_reports, tmp, cadence_ms, speed, depth_top10):
-    from olob import analyze as _analyze
     out = _analyze.run_pipeline(
         exchange=exchange,
         symbol=symbol,
@@ -200,6 +206,39 @@ def analyze(exchange, symbol, date, hour_start, parquet_dir, build_dir,
     click.secho(f"[report] wrote {out}", fg="green")
 
 
+# ---------------------------
+# Backtest (VWAP/TWAP)
+# ---------------------------
+
+@cli.command("backtest", help="Run VWAP/TWAP strategy backtest and output fills + cost.")
+@click.option("--strategy", required=True, help="YAML config (e.g., docs/strategy/vwap.yaml)")
+@click.option("--quotes", required=False, help="TAQ quotes CSV (from replay_tool)")
+@click.option("--file", required=False, help="Alias for --quotes")
+@click.option("--trades", required=False, help="TAQ trades CSV (for VWAP volume weights)")
+@click.option("--out", "out_dir", required=True, help="Output directory (e.g., out/backtests/run1)")
+def backtest(strategy: str, quotes: Optional[str], file: Optional[str],
+             trades: Optional[str], out_dir: str) -> None:
+    """
+    Schedules parent orders into child clips (TWAP/VWAP), applies fixed latency,
+    quantizes by tick/lot, executes against top-of-book, and writes:
+      - *_fills.csv
+      - *_summary.json
+    """
+    qpath = quotes or file
+    if not qpath:
+        click.secho("Provide --quotes or --file (quotes CSV).", fg="red")
+        raise click.Abort()
+
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+
+    summary = _run_backtest(strategy_yaml=str(strategy),
+                            quotes_csv=str(qpath),
+                            trades_csv=str(trades) if trades else None,
+                            out_dir=str(out))
+
+    click.secho(f"[fills]   {summary.get('fills_csv')}", fg="green")
+    click.secho(f"[summary] {out / (Path(strategy).stem + '_summary.json')}", fg="green")
 
 
 if __name__ == "__main__":
