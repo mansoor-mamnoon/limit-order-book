@@ -740,6 +740,73 @@ Artifacts per run include:
 
 This proves **end-to-end functionality of the strategy API, cost model, and queue-aware execution loop**.
 
+## 🔄 Parameter Sweeps & Parallel Backtests
+
+I implemented a **parameter sweep engine** that takes a grid of strategy configs and runs them **in parallel** across multiple processes. The sweep produces per-run artifacts (`fills.csv`, `summary.json`, `risk_summary.json`), plus aggregated results (`aggregate.csv`, `best.json`, `ranking.png`).  
+
+---
+
+### Why this matters
+- Enables **systematic exploration** of strategy hyperparameters (e.g. `parent_qty`, `min_clip`, `cooldown_ms`).  
+- Runs **N configs in parallel**, dramatically speeding up experimentation.  
+- Produces **deterministic artifacts** for reproducibility and comparison.  
+- Selects the **best configuration** by a chosen metric (default: Sharpe-like ratio).  
+
+---
+
+### 📊 Acceptance Sweep (VWAP configs)
+
+I tested a **16-config grid** over a fixed 1-hour TAQ window  
+(start: `2025-08-26 08:07:03+00:00`, end: `2025-08-26 09:07:01+00:00`).  
+
+Grid dimensions:
+- `parent_qty ∈ {2.0, 5.0}`  
+- `min_clip ∈ {0.05, 0.1}`  
+- `cooldown_ms ∈ {0, 250}`  
+- `side = buy`  
+- `seed = 1`  
+
+---
+
+### ✅ Results
+
+```
+[1/16] ok … cooldown_ms=0 … score=9891.53
+[2/16] ok … cooldown_ms=250 … score=6212.68
+…
+[ok] aggregate -> out/sweeps/acceptance/aggregate.csv
+[ok] ranking -> out/sweeps/acceptance/ranking.png
+[ok] best -> out/sweeps/acceptance/best.json
+```
+
+- **All 16 configs completed successfully.**  
+- `cooldown_ms=0` consistently scored higher (~9891) than `cooldown_ms=250` (~6212).  
+- Changing `parent_qty` and `min_clip` did not materially affect Sharpe-like score in this dataset.  
+
+---
+
+### 📈 Evidence (Charts)
+
+**1. Sweep ranking plot (top-K configs)**  
+![Sweep ranking](out/sweeps/acceptance/ranking.png)
+
+**2. Equity curve (example run)**  
+![Equity curve](out/sweeps/acceptance/vwap-cooldown_ms0-min_clip0.05-parent_qty5-sidebuy-26e4f52d/equity_curve.png)
+
+**3. Risk summary plot (drawdown vs Sharpe)**  
+![Risk scatter](out/sweeps/acceptance/risk_scatter.png)
+
+**4. PnL time series (best run)**  
+![PnL timeseries](out/sweeps/acceptance/vwap-cooldown_ms0-min_clip0.05-parent_qty5-sidebuy-26e4f52d/pnl_timeseries.png)
+
+---
+
+### 🏁 Key Takeaways
+- ✅ Parallel sweeps completed deterministically with per-run logs & outputs.  
+- ✅ Sharpe-like ratio was maximized with **cooldown disabled (0ms)**.  
+- ✅ Project now supports **hyperparameter exploration at scale** with reproducible artifacts and visualizations.  
+
+---
 
 ## 🎯 Summary
 

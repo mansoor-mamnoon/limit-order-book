@@ -1,19 +1,22 @@
-name: twap_btcusdt
-type: twap
+# docs/strategy/twap.yaml
+name: twap
 side: buy
-qty: 5.0
 
-# Match your capture window exactly
-start: "2025-08-26T08:07:03Z"
-end:   "2025-08-26T09:07:01Z"
-
-bar_sec: 60
-min_clip: 0.01
+# Parent order & slicing
+parent_qty: 5.0
+min_clip: 0.1
 cooldown_ms: 0
-force_taker: true
 
-cost:
-  tick_size: 0.01
-  lot_size: 0.01
-  fixed_latency_ms: 50
-  taker_bps: 2.0
+# Execution controls
+force_taker: false      # set true to cross the spread immediately
+latency_ms: 0           # decision->arrival latency
+
+# Market model knobs (used by backtester/cost model)
+tick_size: 0.01
+fee_bps: 2.0
+
+# Bars & window (can be overridden by sweep grid)
+bar_sec: 60
+window:
+  start_ns: 1756195623000000000   # 2025-08-26 08:07:03+00:00
+  end_ns:   1756199221000000000   # 2025-08-26 09:07:01+00:00

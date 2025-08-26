@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 import click
 
@@ -20,6 +20,12 @@ from olob import analyze as _analyze
 
 # Backtester (TWAP/VWAP/POV/Iceberg)
 from olob.backtest import run_backtest as _run_backtest
+
+# Sweep (parameter grid + parallel backtests)
+try:
+    from olob.sweep import run_sweep as _run_sweep  # provided by python/olob/sweep.py
+except Exception:
+    _run_sweep = None  # type: ignore
 
 
 @click.group(help="LOB utilities")
@@ -208,6 +214,131 @@ def backtest(strategy: str, quotes: Optional[str], file: Optional[str],
 
     click.secho(f"[fills]   {fills_path}", fg="green")
     click.secho(f"[summary] {summary_path}", fg="green")
+
+
+# ---------------------------
+# Sweep (parameter grid + parallel backtests)
+# ---------------------------
+
+@cli.command("sweep", help="Run parameter sweep in parallel from a grid YAML.")
+@click.option("--grid", "grid_path", required=True, type=click.Path(dir_okay=False, path_type=Path),
+              help="Grid YAML describing base_strategy, inputs, and grid dot-keys")
+@click.option("--out", "out_override", required=False, type=click.Path(file_okay=False, path_type=Path),
+              help="Override out_root in the YAML (optional)")
+@click.option("--max-procs", type=int, default=None, help="Override concurrency (defaults to YAML or CPU count)")
+@click.option("--metric", type=click.Choice(["sharpe_like", "pnl_over_dd", "pnl_total"]), default=None,
+              help="Ranking metric (default from YAML or sharpe_like)")
+@click.option("--topk", type=int, default=None, help="How many configs to plot/rank (default from YAML or 20)")
+@click.option("--resume", is_flag=True, default=False, help="Skip runs with _SUCCESS sentinel")
+def sweep(grid_path: Path,
+          out_override: Optional[Path],
+          max_procs: Optional[int],
+          metric: Optional[str],
+          topk: Optional[int],
+          resume: bool) -> None:
+    if _run_sweep is None:
+        click.secho("Sweep module not available. Ensure python/olob/sweep.py exists and imports correctly.", fg="red")
+        raise click.Abort()
+
+    try:
+        import yaml  # PyYAML required to parse the grid
+    except ImportError:
+        click.secho("PyYAML is required for sweeps. Install with: pip install pyyaml", fg="red")
+        raise click.Abort()
+
+    try:
+        cfg: Dict[str, Any] = yaml.safe_load(grid_path.read_text())
+    except Exception as e:
+        click.secho(f"Failed to read grid YAML: {grid_path}\n{e}", fg="red")
+        raise click.Abort()
+
+    grid_dir = grid_path.parent.resolve()
+    def _resolve(p: str | os.PathLike[str]) -> Path:
+        p = Path(p)
+        return p if p.is_absolute() else (grid_dir / p)
+
+    # Required fields from YAML (resolved relative to YAML file)
+    base_strategy = _resolve(cfg["base_strategy"])
+    quotes        = _resolve(cfg["quotes"])
+    trades        = _resolve(cfg["trades"])
+
+    out_root = Path(cfg.get("out_root", "out/sweeps/default"))
+    if out_override:
+        out_root = out_override
+
+    # Optional fields
+    seeds: List[int] = list(cfg.get("seeds", [1]))
+    grid: Dict[str, List[Any]] = dict(cfg["grid"])  # dot-keys -> values
+    metric_val: str = metric or cfg.get("metric", "sharpe_like")
+    topk_val: int = int(topk or cfg.get("topk", 20))
+    resume_val: bool = bool(resume or cfg.get("resume", True))
+    max_procs_val: int = int(max_procs or cfg.get("max_procs", os.cpu_count() or 4))
+
+    # Optional ranking filters (defaults are off)
+    require_full_fill: bool = bool(cfg.get("require_full_fill", False))
+    min_fill_ratio: float = float(cfg.get("min_fill_ratio", 1.0))
+
+    extra_args = cfg.get("extra_args", [])
+    if isinstance(extra_args, str):
+        import shlex
+        extra_args = shlex.split(extra_args)
+    elif not isinstance(extra_args, list):
+        extra_args = []
+
+    # Pre-flight: inputs must exist
+    missing = [p for p in [base_strategy, quotes, trades] if not Path(p).exists()]
+    if missing:
+        click.secho("[sweep] Missing required files:", fg="red")
+        for m in missing:
+            click.echo(f"  - {m}")
+        raise click.Abort()
+
+    click.secho("== Sweep plan ==", fg="cyan")
+    click.echo(f"base_strategy: {base_strategy}")
+    click.echo(f"quotes:        {quotes}")
+    click.echo(f"trades:        {trades}")
+    click.echo(f"out_root:      {out_root}")
+    click.echo(f"seeds:         {seeds}")
+    click.echo(f"grid keys:     {list(grid.keys())}")
+    click.echo(f"metric:        {metric_val}")
+    click.echo(f"topk:          {topk_val}")
+    click.echo(f"max_procs:     {max_procs_val}")
+    click.echo(f"resume:        {resume_val}")
+    if require_full_fill:
+        click.echo(f"require_full_fill: True (min_fill_ratio={min_fill_ratio})")
+    if extra_args:
+        click.echo(f"extra_args:    {extra_args}")
+
+    out_root.mkdir(parents=True, exist_ok=True)
+    try:
+        agg_csv, plot_path = _run_sweep(
+            base_strategy=base_strategy,
+            quotes=quotes,
+            trades=trades,
+            out_root=out_root,
+            grid=grid,
+            seeds=seeds,
+            max_procs=max_procs_val,
+            metric=metric_val,
+            topk=topk_val,
+            resume=resume_val,
+            extra_args=extra_args,
+            require_full_fill=require_full_fill,
+            min_fill_ratio=min_fill_ratio,
+        )
+    except KeyError as e:
+        click.secho(f"[sweep] Missing required YAML key: {e!s}", fg="red")
+        raise click.Abort()
+    except Exception as e:
+        click.secho(f"[sweep] Failed: {e}", fg="red")
+        raise click.Abort()
+
+    click.secho(f"[ok] aggregate -> {agg_csv}", fg="green")
+    if plot_path and Path(plot_path).exists():
+        click.secho(f"[ok] ranking plot -> {plot_path}", fg="green")
+    best = out_root / "best.json"
+    if best.exists():
+        click.secho(f"[ok] best -> {best}", fg="green")
 
 
 if __name__ == "__main__":

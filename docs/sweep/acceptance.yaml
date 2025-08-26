@@ -1,0 +1,20 @@
+ # docs/sweep/acceptance.yaml
+base_strategy: ../strategy/vwap.yaml
+quotes:       ../../taq_quotes.csv
+trades:       ../../taq_trades.csv
+out_root:     ../../out/sweeps/acceptance
+
+max_procs: 6
+metric: sharpe_like
+topk: 20
+resume: true
+seeds: [1]
+
+grid:
+  window.start_ns: [1756195623000000000]
+  window.end_ns:   [1756199221000000000]
+  side:            ["buy"]
+  parent_qty:      [2.0, 5.0]
+  min_clip:        [0.05, 0.1]
+  cooldown_ms:     [0, 250]
+
