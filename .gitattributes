@@ -26,3 +26,8 @@ dist/**                 linguist-vendored
 **/__pycache__/**       linguist-vendored
 **/*.pyc                linguist-vendored
 **/*.ipynb              linguist-vendored
+
+# Ignore generated reports in language breakdown
+*.html linguist-generated=true
+*.csv  linguist-generated=true
+*.png  linguist-generated=true
