@@ -4,7 +4,15 @@
 #include <vector>
 #include <algorithm>
 #include <chrono>
+#include <optional>
 
+// Linux-only pinning headers (no-op elsewhere)
+#if defined(__linux__)
+  #include <sched.h>
+  #include <pthread.h>
+#endif
+
+// Project headers
 #include "lob/book_core.hpp"
 #include "lob/price_levels.hpp"
 #include "lob/types.hpp"
@@ -17,121 +25,182 @@ struct Args {
   uint64_t warmup = 50'000;
   const char* out_csv = nullptr;
   const char* hist    = nullptr;
+  std::optional<int> pin_core;     // --pin-core N
+  bool use_band = false;
+  long long band_lo = 0, band_hi = 0, band_tick = 1;
+  long long band_steps = 0;
+  uint64_t latency_sample = 1;     // --latency-sample K (0 = disable per-iter timing)
 } A;
 
 static bool arg_eq(const char* a, const char* b){ return std::strcmp(a,b)==0; }
 static uint64_t to_u64(const char* s){
-  char* e;
-  auto v = std::strtoull(s,&e,10);
-  if(*e){ std::fprintf(stderr,"bad int: %s\n",s); std::exit(2); }
+  char* e; auto v = std::strtoull(s,&e,10);
+  if(*e) { std::fprintf(stderr,"bad int: %s\n",s); std::exit(2);}
   return v;
 }
-
-static void usage_and_exit(const char* argv0){
-  std::fprintf(stderr,
-    "Usage: %s [N | --msgs N | --num N | -n N] [--warmup N] [--out-csv PATH] [--hist PATH]\n"
-    "  N / --msgs / --num / -n   : number of measured messages (default 2000000)\n"
-    "  --warmup N                : warmup messages (default 50000)\n"
-    "  --out-csv PATH            : write percentiles + throughput to CSV\n"
-    "  --hist PATH               : write 0..100us histogram CSV (bucket_us,count)\n",
-    argv0);
-  std::exit(2);
+static bool parse_band(const char* s, long long& lo, long long& hi, long long& tick){
+  long long l=0,h=0,t=1;
+  if (std::sscanf(s,"%lld:%lld:%lld",&l,&h,&t)==3 && h>l && t>0) { lo=l; hi=h; tick=t; return true; }
+  return false;
 }
-
 static void parse(int argc, char** argv){
-  bool have_msgs = false;
   for (int i=1;i<argc;i++){
-    if (arg_eq(argv[i],"--msgs") && i+1<argc)          { A.msgs = to_u64(argv[++i]); have_msgs=true; }
-    else if (arg_eq(argv[i],"--num") && i+1<argc)      { A.msgs = to_u64(argv[++i]); have_msgs=true; }
-    else if (arg_eq(argv[i],"-n") && i+1<argc)         { A.msgs = to_u64(argv[++i]); have_msgs=true; }
-    else if (arg_eq(argv[i],"--warmup") && i+1<argc)   { A.warmup = to_u64(argv[++i]); }
-    else if (arg_eq(argv[i],"--out-csv") && i+1<argc)  { A.out_csv = argv[++i]; }
-    else if (arg_eq(argv[i],"--hist") && i+1<argc)     { A.hist = argv[++i]; }
-    else if (argv[i][0] != '-') {
-      // positional N for backward compat
-      A.msgs = to_u64(argv[i]); have_msgs=true;
-    } else {
-      std::fprintf(stderr, "Unknown arg: %s\n", argv[i]);
-      usage_and_exit(argv[0]);
+    if (arg_eq(argv[i],"--msgs") && i+1<argc)           { A.msgs = to_u64(argv[++i]); }
+    else if (arg_eq(argv[i],"--warmup") && i+1<argc)    { A.warmup = to_u64(argv[++i]); }
+    else if (arg_eq(argv[i],"--out-csv") && i+1<argc)   { A.out_csv = argv[++i]; }
+    else if (arg_eq(argv[i],"--hist") && i+1<argc)      { A.hist = argv[++i]; }
+    else if (arg_eq(argv[i],"--pin-core") && i+1<argc)  { A.pin_core = std::atoi(argv[++i]); }
+    else if (arg_eq(argv[i],"--band") && i+1<argc) {
+      if (!parse_band(argv[++i], A.band_lo, A.band_hi, A.band_tick)) {
+        std::fprintf(stderr, "Bad --band format. Use: lo:hi:tick (e.g. 999000:1001000:1)\n");
+        std::exit(2);
+      }
+      A.use_band = true;
+    }
+    else if (arg_eq(argv[i],"--latency-sample") && i+1<argc) {
+      A.latency_sample = to_u64(argv[++i]); // 0 = throughput mode
+    }
+    else {
+      std::fprintf(stderr,"Unknown arg: %s\n", argv[i]);
+      std::fprintf(stderr,"Usage: %s --msgs N --warmup N [--out-csv path] [--hist path] [--pin-core N] [--band lo:hi:tick] [--latency-sample K]\n", argv[0]);
+      std::exit(2);
     }
   }
-  (void)have_msgs; // not strictly needed; default is fine
+  if (A.use_band) {
+    const long long span = A.band_hi - A.band_lo;
+    if (span <= 0 || A.band_tick <= 0 || (span % A.band_tick) != 0) {
+      std::fprintf(stderr, "Invalid band: hi>lo and (hi-lo) must be a multiple of tick.\n");
+      std::exit(2);
+    }
+    A.band_steps = span / A.band_tick;
+    if (A.band_steps <= 0) { std::fprintf(stderr, "Band has zero steps; choose a wider range.\n"); std::exit(2); }
+  }
+}
+
+static void maybe_pin_core(std::optional<int> core){
+#if defined(__linux__)
+  if (!core) return;
+  cpu_set_t set; CPU_ZERO(&set); CPU_SET(*core, &set);
+  (void)pthread_setaffinity_np(pthread_self(), sizeof(set), &set);
+#else
+  (void)core;
+#endif
 }
 
 struct Histo {
-  static constexpr int MAX_US=100;  // 0–100us buckets, last is overflow
+  static constexpr int MAX_US=100;
   uint64_t buckets[MAX_US+1]{};
-  void add(double us) {
-    int i = (us<MAX_US)? (int)us : MAX_US;
-    if (i < 0) i = 0;
-    if (i > MAX_US) i = MAX_US;
-    buckets[i]++;
-  }
+  void add(double us) { int i = (us<MAX_US)? (int)us : MAX_US; buckets[i]++; }
   void write(const char* path){
-    if(!path) return;
-    FILE* f = std::fopen(path,"w");
-    if(!f) return;
+    if(!path) return; FILE* f = std::fopen(path,"w"); if(!f) return;
     for(int i=0;i<=MAX_US;i++) std::fprintf(f,"%d,%llu\n", i, (unsigned long long)buckets[i]);
     std::fclose(f);
   }
 };
 
-int main(int argc, char** argv){
-  parse(argc, argv);
+static inline Tick gen_price(uint64_t i) {
+  if (A.use_band) {
+    const long long step_idx = (long long)(i % (uint64_t)A.band_steps);
+    const long long px = A.band_lo + step_idx * A.band_tick;
+    return (Tick)px;
+  } else {
+    return (Tick)(1000 + int(i % 25));
+  }
+}
 
-  // Simple synthetic book with sparse ladders
-  PriceLevelsSparse bids;
-  PriceLevelsSparse asks;
+template <typename Bids, typename Asks>
+static int run_bench(Bids& bids, Asks& asks){
   BookCore book(bids, asks, /*logger*/nullptr);
 
-  std::vector<double> us; us.reserve(A.msgs);
+  std::vector<double> us; us.reserve(A.msgs / (A.latency_sample ? A.latency_sample : 1));
   Histo H{};
 
   // Warmup
   for(uint64_t i=0;i<A.warmup;i++){
-    NewOrder o{/*seq*/(uint64_t)i, /*ts*/0, /*id*/i, /*user*/1,
-               /*side*/ (i&1)?Side::Bid:Side::Ask, /*px*/1000 + int(i%25),
-               /*qty*/1, /*flags*/0};
+    NewOrder o{(uint64_t)i, 0, i, 1, (i&1)?Side::Bid:Side::Ask, gen_price(i), 1, 0};
     (void)book.submit_limit(o);
   }
 
+  // Throughput timing around the whole loop
   auto t0 = clk::now();
   for(uint64_t i=0;i<A.msgs;i++){
-    NewOrder o{/*seq*/(uint64_t)(i + A.warmup), /*ts*/0, /*id*/i+1'000'000, /*user*/2,
-               /*side*/ (i&1)?Side::Ask:Side::Bid, /*px*/1000 + int(i%25),
-               /*qty*/1, /*flags*/0};
-    auto s = clk::now();
-    (void)book.submit_limit(o);
-    auto e = clk::now();
-    double d_us = std::chrono::duration<double,std::micro>(e-s).count();
-    us.push_back(d_us);
-    H.add(d_us);
+    NewOrder o{(uint64_t)(i + A.warmup), 0, i+1'000'000, 2,
+               (i&1)?Side::Ask:Side::Bid, gen_price(i), 1, 0};
+
+    if (A.latency_sample == 0) {
+      (void)book.submit_limit(o);
+    } else if ((i & (A.latency_sample - 1)) == 0) {
+      auto s = clk::now();
+      (void)book.submit_limit(o);
+      auto e = clk::now();
+      double d_us = std::chrono::duration<double,std::micro>(e-s).count();
+      us.push_back(d_us);
+      H.add(d_us);
+    } else {
+      (void)book.submit_limit(o);
+    }
   }
   auto t1 = clk::now();
 
   const double wall_s = std::chrono::duration<double>(t1-t0).count();
   const double mps = A.msgs / wall_s;
 
+  // Percentiles from the sampled set (or empty if latency_sample=0)
   std::sort(us.begin(), us.end());
-  auto p = [&](double q){
-    size_t idx = (size_t)(q * (us.size()-1) + 0.5);
-    return us[idx];
+  auto pct = [&](double q){
+    if (us.empty()) return 0.0;
+    const double idx = q * (us.size()-1);
+    const size_t i = (size_t)idx;
+    const double frac = idx - i;
+    if (i+1 < us.size()) return us[i]*(1.0-frac) + us[i+1]*frac;
+    return us[i];
   };
-  double p50=p(0.50), p90=p(0.90), p99=p(0.99), p999=p(0.999);
+  const double p50   = pct(0.50);
+  const double p90   = pct(0.90);
+  const double p99   = pct(0.99);
+  const double p999  = pct(0.999);
+  const double p9999 = pct(0.9999);
 
   std::printf("msgs=%llu, time=%.3fs, rate=%.1f msgs/s\n",
               (unsigned long long)A.msgs, wall_s, mps);
-  std::printf("latency_us: p50=%.2f p90=%.2f p99=%.2f p99.9=%.2f\n",
-              p50, p90, p99, p999);
+  if (!us.empty()) {
+    std::printf("latency_us: p50=%.3f p90=%.3f p99=%.3f p99.9=%.3f p99.99=%.3f (sample_every=%llu)\n",
+                p50, p90, p99, p999, p9999, (unsigned long long)A.latency_sample);
+  } else {
+    std::printf("latency_us: (disabled; --latency-sample 0)\n");
+  }
 
-  if (A.out_csv) {
+  if (A.out_csv){
     FILE* f = std::fopen(A.out_csv,"w");
-    if (f) {
-      std::fprintf(f,"percentile,us\n50,%.3f\n90,%.3f\n99,%.3f\n99.9,%.3f\n", p50,p90,p99,p999);
-      std::fprintf(f,"throughput_msgs_per_sec,%.1f\n", mps);
+    if (f){
+      std::fprintf(f,
+        "msgs,wall_s,rate_msgs_s,p50_us,p90_us,p99_us,p99_9_us,p99_99_us,band,band_lo,band_hi,band_tick,pin_core,sample_every\n");
+      std::fprintf(f,
+        "%llu,%.6f,%.1f,%.6f,%.6f,%.6f,%.6f,%.6f,%s,%lld,%lld,%lld,%d,%llu\n",
+        (unsigned long long)A.msgs, wall_s, mps, p50, p90, p99, p999, p9999,
+        (A.use_band ? "yes" : "no"),
+        (long long)A.band_lo, (long long)A.band_hi, (long long)A.band_tick,
+        (A.pin_core ? *A.pin_core : -1),
+        (unsigned long long)A.latency_sample
+      );
       std::fclose(f);
     }
   }
+
   H.write(A.hist);
   return 0;
+}
+
+int main(int argc, char** argv){
+  parse(argc, argv);
+  maybe_pin_core(A.pin_core);
+
+  if (A.use_band){
+    PriceBand band{(Tick)A.band_lo, (Tick)A.band_hi, (Tick)A.band_tick};
+    PriceLevelsContig bids(band), asks(band);
+    return run_bench(bids, asks);
+  } else {
+    PriceLevelsSparse bids, asks;
+    return run_bench(bids, asks);
+  }
 }

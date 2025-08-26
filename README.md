@@ -523,6 +523,71 @@ lob analyze --exchange binanceus --symbol BTCUSDT \
 The HTML report is fully **self-contained** — just open it in any browser, no external files needed.
 
 
+## ✅ Performance & Analytics
+
+We validated the engine on both **synthetic** and **real exchange data**.
+
+---
+
+### 🧪 Synthetic Benchmark
+
+```bash
+./build/cpp/bench_tool \
+  --msgs 8000000 --warmup 200000 \
+  --band 1000000:1000064:1 \
+  --latency-sample 0
+```
+
+**Throughput**  
+```
+msgs=8000000, time=0.386s, rate=20714662.3 msgs/s
+```
+
+```bash
+./build/cpp/bench_tool \
+  --msgs 8000000 --warmup 200000 \
+  --band 1000000:1000064:1 \
+  --latency-sample 1024
+```
+
+**Latency (sample_every=1024)**  
+```
+p50=0.042 µs, p90=0.083 µs, p99≈1.0 µs, p99.9≈96 µs, p99.99≈176 µs
+```
+
+---
+
+### 📊 Real-Data Replay & Analysis
+
+```bash
+lob analyze --exchange binanceus --symbol BTCUSDT \
+  --date 2025-08-25 --hour-start 03:00
+```
+
+**Output (excerpt)**  
+```
+[analytics] wrote out/tmp_report/analytics/summary.json and plots -> out/tmp_report/analytics/plots
+[cadence] quotes median Δ=50.0 ms, p90 Δ=50.0 ms, rows=44258
+...
+[ok] wrote clustering figure impact_clusters.png with k=3
+[ok] Wrote: out/tmp_report/analytics/plots/vol.png, impact.png, oflow_autocorr.png, drift_vs_imbalance.png
+[ok] Summary JSON: out/tmp_report/analytics/microstructure_summary.json
+[report] wrote out/reports/2025-08-25_BTCUSDT.html
+```
+
+**Artifacts include**
+- `out/reports/2025-08-25_BTCUSDT.html` — self-contained HTML report.  
+- Plots: `vol.png`, `impact.png`, `oflow_autocorr.png`, `drift_vs_imbalance.png`, `impact_clusters.png`.  
+- JSON summaries under `out/tmp_report/analytics/`.  
+
+---
+
+### 🏁 Result
+
+- **Synthetic throughput**: >20M msgs/sec (**≥3M Gate passed**).  
+- **Real-data replay**: Clean report with volatility, impact curves, autocorr, drift, and clustering.  
+
+
 ## 🎯 Summary
 
 - **Low-latency hot path**: arenas, branch minimization, cache locality.  

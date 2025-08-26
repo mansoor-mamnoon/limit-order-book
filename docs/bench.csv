@@ -1,6 +1,2 @@
-percentile,us
-50,0.042
-90,0.083
-99,0.084
-99.9,0.125
-throughput_msgs_per_sec,12815782.2
+msgs,wall_s,rate_msgs_s,p50_us,p90_us,p99_us,p99_9_us,p99_99_us,band,band_lo,band_hi,band_tick,pin_core,sample_every
+8000000,5.060650,1580824.7,1.125000,1.208000,4.370080,7.521812,15.230829,yes,999000,1001000,1,-1,1024
