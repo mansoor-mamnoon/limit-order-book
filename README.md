@@ -812,6 +812,55 @@ python -m olob.make_readme_figs --sweep-dir out/sweeps/acceptance
 ```
 
 
+## 🎥 Day 19 — Minimal Live Visualization
+
+A major upgrade to this project is the **live visualization layer**. Instead of inspecting only static CSVs, I can now **see the market and strategy evolve in real time**. This bridges raw data with intuition — a key requirement for understanding trading algorithms.
+
+---
+
+### ▶️ Running the Streamlit App
+
+I can launch the interactive dashboard locally with:
+
+```bash
+streamlit run app.py
+```
+
+The app provides:
+
+- **Price panels**: midprice, microprice, and spread replayed tick by tick.  
+- **PnL & Inventory panel**: equity, cash, and position side-by-side.  
+- **Optional depth heatmap**: liquidity across the top-10 bid/ask levels.  
+- **Playback controls**:  
+  - ⏯ Play / Pause  
+  - 🔄 Speed multipliers (1× / 10× / 100×)  
+  - 🪟 Visible window (10–300 sec)  
+  - 📊 Forward-fill & resample smoothing  
+
+---
+
+### 📺 Example Interface
+
+Here is a screenshot of the Streamlit app layout and controls:  
+![Streamlit UI](docs/assets/streamlit_ui.png)
+
+---
+
+### 🎬 Demo Playback (GIF Evidence)
+
+For readers who can’t run Streamlit, here’s a 60-second replay GIF generated directly from captured quotes.  
+It shows how the midprice and spread move over time:  
+![Replay Demo](out/viz.gif)
+
+---
+
+### 🌟 Why This Matters
+
+- **Visual validation**: makes it easy to spot how strategies interact with the order book.  
+- **Engaging for reviewers**: GIF evidence lives in the repo; app can be launched in one command.  
+- **Bridges quant + intuition**: more compelling than raw CSVs or tables alone.  
+
+
 ## 🎯 Summary
 
 - **Low-latency hot path**: arenas, branch minimization, cache locality.  
