@@ -3,7 +3,9 @@
 <!-- Core Project Badges -->
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Contributions Welcome](https://img.shields.io/badge/Contributions-Welcome-brightgreen.svg)](CONTRIBUTING.md)
-[![Build](https://github.com/mansoor-mamnoon/limit-order-book/actions/workflows/ci.yml/badge.svg)](https://github.com/mansoor-mamnoon/limit-order-book/actions)
+[![Build & Test](https://github.com/mansoor-mamnoon/limit-order-book/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/mansoor-mamnoon/limit-order-book/actions/workflows/build.yml)
+[![Lint](https://github.com/mansoor-mamnoon/limit-order-book/actions/workflows/lint.yml/badge.svg?branch=main)](https://github.com/mansoor-mamnoon/limit-order-book/actions/workflows/lint.yml)
+[![Release](https://github.com/mansoor-mamnoon/limit-order-book/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/mansoor-mamnoon/limit-order-book/actions/workflows/release.yml)
 [![Release](https://img.shields.io/github/v/release/mansoor-mamnoon/limit-order-book)](https://github.com/mansoor-mamnoon/limit-order-book/releases)
 [![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg?logo=docker)](https://hub.docker.com/)
 [![Benchmarks](https://img.shields.io/badge/Benchmarks-Reproducible-important.svg)](docs/bench.md)
