@@ -987,22 +987,6 @@ build/cpp/tools/replay_tool \
 
 ---
 
-### 🖼️ Embedding Diagrams
-
-If your pipeline (e.g., `olob.analyze` or notebooks) generates figures, you can embed them directly in the README:
-
-**Example: TWAP Equity Curve (A vs B)**  
-![TWAP PnL Timeseries](out/snapshot_proof/bt/A/pnl_timeseries.png)
-
-**Example: Depth Snapshot**  
-![Depth Top-10](depth_chart.png)
-
-*Tips*:  
-- Keep images small. For large binaries, use Git LFS.  
-- If you only have CSV (e.g., `pnl_timeseries.csv`), plot it in a notebook and export a PNG to a stable path (e.g., `docs/img/snapshot_proof_pnl.png`) for embedding.  
-
----
-
 ### 📊 Snapshot Proof Diagrams
 
 After running:
@@ -1035,7 +1019,7 @@ the following three diagrams are produced in `out/snapshot_proof/`:
 > ✅ When all three charts overlap between A and B, this demonstrates that “snapshot at cut + mid-file replay” reproduces the single-pass replay.
 
 
-## 🧱 Containerized Analytics + GHCR Release + Report Generation (Day 21)
+## 🧱 Containerized Analytics + GHCR Release + Report Generation
 
 I now ship a **reproducible, containerized analytics pipeline** with **GitHub Actions** publishing to **GHCR** on version tags.  
 This section explains how to build, release, run, and verify the outputs.
