@@ -1,8 +1,58 @@
 # Limit Order Book (LOB) Engine — C++20
 
-A high-performance C++ matching engine that processes buy/sell orders with exchange-style semantics. The codebase demonstrates **low-latency hot-path design**, **cache-friendly data structures**, **reproducible benchmarking**, and **clean build/test tooling**.
+<!-- Core Project Badges -->
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Contributions Welcome](https://img.shields.io/badge/Contributions-Welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![Build](https://github.com/mansoor-mamnoon/limit-order-book/actions/workflows/ci.yml/badge.svg)](https://github.com/mansoor-mamnoon/limit-order-book/actions)
+[![Release](https://img.shields.io/github/v/release/mansoor-mamnoon/limit-order-book)](https://github.com/mansoor-mamnoon/limit-order-book/releases)
+[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg?logo=docker)](https://hub.docker.com/)
+[![Benchmarks](https://img.shields.io/badge/Benchmarks-Reproducible-important.svg)](docs/bench.md)
+
+A high-performance C++ matching engine that processes buy/sell orders with exchange-style semantics.  
+Demonstrates **low-latency hot-path design**, **cache-friendly data structures**,  
+**reproducible benchmarking**, and **clean build/test tooling**.
 
 ---
+
+## 🧰 Tech Stack
+
+### 🔤 Languages & Compilers
+![C++20](https://img.shields.io/badge/C++-20-00599C.svg?logo=c%2B%2B&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.11-blue.svg?logo=python&logoColor=white)
+![CMake](https://img.shields.io/badge/CMake-064F8C.svg?logo=cmake&logoColor=white)
+![GCC](https://img.shields.io/badge/GCC-11+-blue.svg?logo=gnu&logoColor=white)
+![Clang](https://img.shields.io/badge/Clang-14+-orange.svg?logo=llvm&logoColor=white)
+
+### ✅ Testing & CI/CD
+![Catch2](https://img.shields.io/badge/Tests-Catch2-red.svg)
+![PyBind11](https://img.shields.io/badge/PyBind11-Bindings-orange.svg)
+![GitHub Actions](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF.svg?logo=githubactions&logoColor=white)
+![cmocka](https://img.shields.io/badge/Mocking-cmocka-lightgrey.svg)
+
+### ⚡ Performance & Profiling
+![perf](https://img.shields.io/badge/Linux-perf-black.svg?logo=linux&logoColor=white)
+![Valgrind](https://img.shields.io/badge/Valgrind-MemCheck-purple.svg)
+![gprof](https://img.shields.io/badge/gprof-Profiling-blue.svg)
+![AddressSanitizer](https://img.shields.io/badge/ASan-Memory%20Safety-red.svg)
+
+### 📂 Data & Processing
+![Parquet](https://img.shields.io/badge/Data-Parquet-50C878.svg?logo=apache&logoColor=white)
+![pandas](https://img.shields.io/badge/pandas-DataFrame-150458.svg?logo=pandas&logoColor=white)
+![NumPy](https://img.shields.io/badge/NumPy-Array-013243.svg?logo=numpy&logoColor=white)
+
+### 🐳 Containers & Release
+![Docker](https://img.shields.io/badge/Docker-Container-blue.svg?logo=docker)
+![GHCR](https://img.shields.io/badge/GitHub%20Packages-GHCR-181717.svg?logo=github)
+
+### 📊 Visualization & Reporting
+![Matplotlib](https://img.shields.io/badge/Matplotlib-Charts-11557c.svg?logo=python&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-FF4B4B.svg?logo=streamlit&logoColor=white)
+![Jupyter](https://img.shields.io/badge/Jupyter-Notebook-F37626.svg?logo=jupyter&logoColor=white)
+
+### 🖥️ Systems & Infra
+![Linux](https://img.shields.io/badge/Linux-OS-FCC624.svg?logo=linux&logoColor=black)
+![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04-E95420.svg?logo=ubuntu&logoColor=white)
+![macOS](https://img.shields.io/badge/macOS-Profiler-999999.svg?logo=apple&logoColor=white)
 
 ## 🔎 Quick Highlights
 
