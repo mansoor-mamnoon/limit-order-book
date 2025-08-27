@@ -103,8 +103,6 @@ def _find_replay_tool() -> str:
             return str(c)
     raise SystemExit("replay_tool not found. Build it via: cmake -S cpp -B build/cpp && cmake --build build/cpp -j")
 
-
-
 # ---- Optional backtest equivalence (A vs B) ---------------------------------
 def prove_equivalence(
     strategy_yaml: str,

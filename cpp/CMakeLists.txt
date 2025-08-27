@@ -8,6 +8,7 @@ option(LOB_BUILD_TESTS   "Build C++ tests (requires Catch2)" OFF)
 option(LOB_PROFILING     "Build with frame pointers for perf/Instruments" OFF)
 option(LOB_LTO           "Enable Link Time Optimization in Release" OFF)
 option(LOB_USE_MIMALLOC  "Link mimalloc for operator new/delete (tools + libs)" OFF)
+option(LOB_BUILD_PYBIND  "Build Python bindings (pybind11)" ON)
 
 # ---------------- Global defaults ----------------
 set(CMAKE_CXX_STANDARD 20)
@@ -112,30 +113,33 @@ if(LOB_ENABLE_ASAN AND CMAKE_BUILD_TYPE STREQUAL "Debug")
   endif()
 endif()
 
-# ---------------- pybind11 module ----------------
-include(FetchContent)
-if(NOT TARGET pybind11::module)
-  FetchContent_Declare(
-    pybind11
-    GIT_REPOSITORY https://github.com/pybind/pybind11.git
-    GIT_TAG v2.12.0
+# ---------------- pybind11 module (optional) ----------------
+if(LOB_BUILD_PYBIND)
+  include(FetchContent)
+  if(NOT TARGET pybind11::module)
+    FetchContent_Declare(
+      pybind11
+      GIT_REPOSITORY https://github.com/pybind/pybind11.git
+      GIT_TAG v2.12.0
+    )
+    FetchContent_MakeAvailable(pybind11)
+  endif()
+
+  pybind11_add_module(lob_cpp MODULE
+    ../python/olob/_bindings.cpp
   )
-  FetchContent_MakeAvailable(pybind11)
-endif()
+  target_link_libraries(lob_cpp PRIVATE lob_core lob_util)
+  target_include_directories(lob_cpp PRIVATE include)
+  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+    target_compile_options(lob_cpp PRIVATE -O3 -march=native -fvisibility=hidden)
+  endif()
+  # produce a module name importable as: from olob import _lob
+  set_target_properties(lob_cpp PROPERTIES OUTPUT_NAME "_lob")
 
-pybind11_add_module(lob_cpp MODULE
-  ../python/olob/_bindings.cpp
-)
-target_link_libraries(lob_cpp PRIVATE lob_core lob_util)
-target_include_directories(lob_cpp PRIVATE include)
-if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-  target_compile_options(lob_cpp PRIVATE -O3 -march=native -fvisibility=hidden)
-endif()
-set_target_properties(lob_cpp PROPERTIES OUTPUT_NAME "_lob")
-
-# ---------------- Install ----------------
-if(WIN32)
-  install(TARGETS lob_cpp RUNTIME DESTINATION olob)
-else()
-  install(TARGETS lob_cpp LIBRARY DESTINATION olob)
+  # Install rule (not used in Docker flow, but fine to keep)
+  if(WIN32)
+    install(TARGETS lob_cpp RUNTIME DESTINATION olob)
+  else()
+    install(TARGETS lob_cpp LIBRARY DESTINATION olob)
+  endif()
 endif()

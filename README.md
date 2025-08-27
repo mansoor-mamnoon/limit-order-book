@@ -1035,6 +1035,181 @@ the following three diagrams are produced in `out/snapshot_proof/`:
 > ✅ When all three charts overlap between A and B, this demonstrates that “snapshot at cut + mid-file replay” reproduces the single-pass replay.
 
 
+## 🧱 Containerized Analytics + GHCR Release + Report Generation (Day 21)
+
+I now ship a **reproducible, containerized analytics pipeline** with **GitHub Actions** publishing to **GHCR** on version tags.  
+This section explains how to build, release, run, and verify the outputs.
+
+---
+
+### 1) 🐳 Docker Image (local build)
+
+A **Dockerfile** lives at repo root and builds a two-stage image:
+
+- **Builder**: compiles C++ tools (`replay_tool`) and pybind11 `_lob.so` against Python 3.11 (ABI aligned).  
+- **Runtime**: ships `lob` CLI, scientific Python stack, and C++ artifacts.  
+
+Build locally:
+
+```bash
+docker build -t lob:v1.0 .
+```
+
+Sanity check:
+
+```bash
+docker run --rm lob:v1.0 --help | head -n 5
+# Expect:
+# Usage: python -m olob.cli [OPTIONS] COMMAND [ARGS]...
+#   LOB utilities
+```
+
+---
+
+### 2) 🚀 GitHub Actions (automatic release to GHCR)
+
+A workflow at `.github/workflows/release.yml`:
+
+- **Triggers** on tags matching `v*` (e.g., `v1.0`, `v1.1.0`).  
+- **Builds** the Docker image using Buildx.  
+- **Pushes** to GHCR as:  
+  - `ghcr.io/<OWNER>/<REPO>:<tag>`  
+  - `ghcr.io/<OWNER>/<REPO>:latest`  
+- **Creates** a GitHub Release for the same tag (with auto notes).  
+
+Tag & push to trigger:
+
+```bash
+git tag v1.0
+git push origin v1.0
+```
+
+Verify in GitHub:
+- Actions tab → release workflow runs green.  
+- Packages → image appears as `ghcr.io/<OWNER>/<REPO>`.  
+- Releases → new `v1.0` release with notes.  
+
+*(Optional)*: Make the GHCR package **Public** via GitHub → Packages → Settings.
+
+---
+
+### 3) 📑 One-Command HTML Report (Evidence)
+
+I can generate a **self-contained HTML report** for any date/hour window using normalized parquet.
+
+**Expected host layout:**
+```
+parquet/2025-08-25/binanceus/BTCUSDT/events.parquet
+recon/2025-08-25/binanceus/BTCUSDT/top10_depth.parquet   # optional (enables depth charts)
+out/                                                     # will hold results
+```
+
+**Run (local Docker build):**
+```bash
+docker run --rm \
+  -v "$PWD/parquet:/data/parquet:ro" \
+  -v "$PWD/recon:/data/recon:ro" \
+  -v "$PWD/out:/out" \
+  lob:v1.0 analyze \
+  --exchange binanceus --symbol BTCUSDT \
+  --date 2025-08-25 --hour-start 03:00 \
+  --parquet-dir /data/parquet \
+  --out-reports /out \
+  --depth-top10 /data/recon/2025-08-25/binanceus/BTCUSDT/top10_depth.parquet \
+  --tmp /out/tmp_report
+```
+
+**Run (GHCR image after tagging):**
+```bash
+docker run --rm \
+  -v "$PWD/parquet:/data/parquet:ro" \
+  -v "$PWD/recon:/data/recon:ro" \
+  -v "$PWD/out:/out" \
+  ghcr.io/<OWNER>/<REPO>:v1.0 analyze \
+  --exchange binanceus --symbol BTCUSDT \
+  --date 2025-08-25 --hour-start 03:00 \
+  --parquet-dir /data/parquet \
+  --out-reports /out \
+  --depth-top10 /data/recon/2025-08-25/binanceus/BTCUSDT/top10_depth.parquet \
+  --tmp /out/tmp_report
+```
+
+---
+
+### 📦 What Gets Produced (Proof Artifacts)
+
+**Final Report HTML**
+```
+out/2025-08-25_BTCUSDT.html
+# or out/reports/2025-08-25_BTCUSDT.html depending on CLI version
+```
+
+**Contains:**
+- Spread over time.  
+- Mid vs Microprice.  
+- Best-level imbalance (L1).  
+- Top-10 Bid/Ask Depth (if `--depth-top10` provided).  
+- Microstructure (if enabled): realized volatility, impact curves, order-flow autocorr, drift vs imbalance, impact clusters.  
+- Embedded JSON summary for reproducibility.  
+
+**Intermediates (kept via `--tmp`):**
+```
+out/tmp_report/
+  taq_quotes.csv
+  taq_trades.csv
+  analytics/
+    plots/
+      spread.png
+      mid_microprice.png
+      imbalance_L1.png
+      depth_bid.png           # present if --depth-top10 provided
+      depth_ask.png           # present if --depth-top10 provided
+      vol.png                 # microstructure enabled
+      impact.png              # microstructure enabled
+      oflow_autocorr.png      # microstructure enabled
+      drift_vs_imbalance.png  # microstructure enabled
+      impact_clusters.png     # microstructure enabled
+    summary.json
+```
+
+---
+
+### ✅ Verify (Copy/Paste)
+
+```bash
+# Confirm HTML report exists
+ls -l out | grep -E 'BTCUSDT.*\.html' || true
+
+# Confirm quotes/trades were produced
+head -n 3 out/tmp_report/taq_quotes.csv
+head -n 3 out/tmp_report/taq_trades.csv
+
+# Confirm analytics plots exist
+ls -l out/tmp_report/analytics/plots
+
+# Confirm JSON summary
+cat out/tmp_report/analytics/summary.json | head -n 50
+```
+
+**Expected columns (quotes CSV):**
+```
+ts_ns,bid_px,bid_qty,ask_px,ask_qty
+# (metrics layer computes spread/mid/microprice and sanitizes invalid rows)
+```
+
+---
+
+### 🛠️ Troubleshooting (Fast)
+
+- **“Parquet not found”** → ensure you run `docker run` from repo root and mount the correct host path into `/data/parquet`.  
+  ```bash
+  docker run --rm -v "$PWD/parquet:/data/parquet:ro" lob:v1.0 ls -R /data/parquet | head -50
+  ```
+- **Missing depth charts** → provide `--depth-top10` parquet (from reconstruction step) and mount `/data/recon`.  
+- **Microstructure plots missing** → check logs in `out/tmp_report/analytics/`; ensure scikit-learn is present (it is, in the image).  
+
+
+
 ## 🎯 Summary
 
 - **Low-latency hot path**: arenas, branch minimization, cache locality.  

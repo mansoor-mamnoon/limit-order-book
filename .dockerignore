@@ -1,0 +1,10 @@
+.git
+.github
+build
+recon
+__pycache__/
+*.pyc
+*.pyo
+*.swp
+*.swo
+.parquet-cache

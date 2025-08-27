@@ -1,6 +1,6 @@
 # cpp/tools/CMakeLists.txt
 
-# bench_tool (unchanged)
+# bench_tool
 add_executable(bench_tool bench.cpp)
 target_link_libraries(bench_tool PRIVATE lob_core lob_util)
 target_include_directories(bench_tool PRIVATE ${CMAKE_CURRENT_LIST_DIR}/../include)
@@ -8,10 +8,13 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   target_compile_options(bench_tool PRIVATE -O3 -march=native)
 endif()
 
-# replay_tool with snapshot-at-cut and resume-from-snapshot
-add_executable(replay_tool replay.cpp)  # <- place your new snapshot-enabled replay.cpp here
+# replay_tool
+add_executable(replay_tool replay.cpp)
 target_link_libraries(replay_tool PRIVATE lob_core lob_util)
 target_include_directories(replay_tool PRIVATE ${CMAKE_CURRENT_LIST_DIR}/../include)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  target_compile_options(replay_tool PRIVATE -O3 -march=native)
+endif()
 
 # Optional mimalloc for tools
 if(LOB_USE_MIMALLOC)

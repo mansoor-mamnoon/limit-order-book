@@ -106,7 +106,20 @@ def run_pipeline(
     df[["ts_ns", "type", "side", "price", "qty"]].to_csv(csv_events, index=False)
 
     # 2) replay_tool
-    replay = Path(build_dir) / "cpp" / "replay_tool"
+    from pathlib import Path
+    import os, shutil
+
+    candidates = [
+        Path("build/cpp/replay_tool"),
+        Path("build/cpp/tools/replay_tool"),
+        Path(shutil.which("replay_tool") or "/nonexistent"),
+    ]
+    replay = next((p for p in candidates if p.exists() and os.access(p, os.X_OK)), None)
+    if not replay:
+        raise FileNotFoundError(
+        "replay_tool not found or not executable. Tried:\n  " +
+        "\n  ".join(map(str, candidates))
+    )
     if not _bin_ok(replay):
         raise FileNotFoundError(f"replay_tool not found or not executable: {replay}")
 
