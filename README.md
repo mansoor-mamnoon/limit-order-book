@@ -54,6 +54,11 @@ Demonstrates **low-latency hot-path design**, **cache-friendly data structures**
 ![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04-E95420.svg?logo=ubuntu&logoColor=white)
 ![macOS](https://img.shields.io/badge/macOS-Profiler-999999.svg?logo=apple&logoColor=white)
 
+⚡ Throughput: 20.7M msgs/sec
+📊 Latency: p50=0.04µs, p99≈1µs
+✅ Verified on real BTCUSDT BinanceUS data
+
+
 ## 🔎 Quick Highlights
 
 - **Core engine (`BookCore`)**: limit & market orders, cancels, modifies, FIFO per price level.
