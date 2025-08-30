@@ -83,7 +83,7 @@ Demonstrates **low-latency hot-path design**, **cache-friendly data structures**
 | PriceLevels (B/A)  |<-------->|   LevelFIFO(s)    |
 | best_bid/ask +     |          |  intrusive queues |
 | best_level_ptr     |          +-------------------+
-                                        |
++-------------------+                   |
                                         v
                                +-------------------+
                                | Logger / Snapshot |
