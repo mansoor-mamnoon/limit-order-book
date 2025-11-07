@@ -18,6 +18,9 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(catch2)
 
+#export compile commands
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # Build all native code inside cpp/
 add_subdirectory(cpp)
 
