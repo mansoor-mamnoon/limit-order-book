@@ -163,7 +163,7 @@ ctest --test-dir build --output-on-failure
 
 **Benchmark (CSV + histogram)**
 ```bash
-./build/cpp/bench_tool --msgs 2000000 --warmup 50000 \
+./build/cpp/tools/bench_tool --msgs 2000000 --warmup 50000 \
   --out-csv docs/bench.csv --hist docs/hist.csv
 ```
 Example output:
